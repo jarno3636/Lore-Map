@@ -565,4 +565,4 @@ function ActivityChip({
       {label}
     </span>
   );
-}p
+}
