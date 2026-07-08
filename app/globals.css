@@ -2103,12 +2103,25 @@ img {
   top: 0;
   z-index: 80;
   width: 100%;
-  padding: 10px clamp(12px, 3vw, 22px);
+  padding: 10px clamp(10px, 3vw, 22px);
   background:
-    linear-gradient(180deg, rgba(3, 13, 18, 0.92), rgba(3, 13, 18, 0.58)),
-    radial-gradient(circle at 50% 0%, rgba(103, 213, 246, 0.12), transparent 52%);
-  border-bottom: 1px solid rgba(146, 223, 241, 0.12);
+    linear-gradient(180deg, rgba(3, 13, 18, 0.94), rgba(3, 13, 18, 0.64)),
+    radial-gradient(circle at 50% 0%, rgba(103, 213, 246, 0.14), transparent 56%);
+  border-bottom: 1px solid rgba(146, 223, 241, 0.13);
   backdrop-filter: blur(18px);
+  transition:
+    padding 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease;
+}
+
+.toby-nav.is-scrolled {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  background:
+    linear-gradient(180deg, rgba(3, 13, 18, 0.98), rgba(3, 13, 18, 0.78)),
+    radial-gradient(circle at 50% 0%, rgba(249, 201, 104, 0.1), transparent 58%);
+  border-bottom-color: rgba(249, 201, 104, 0.16);
 }
 
 .toby-nav-inner {
@@ -2123,7 +2136,7 @@ img {
 .toby-nav-brand {
   display: inline-grid;
   grid-template-columns: auto 1fr;
-  gap: 9px;
+  gap: 10px;
   align-items: center;
   min-width: 0;
   color: #fff8e6;
@@ -2131,17 +2144,34 @@ img {
 }
 
 .toby-nav-brand-mark {
+  position: relative;
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   place-items: center;
   overflow: hidden;
-  border: 1px solid rgba(146, 223, 241, 0.22);
-  border-radius: 14px;
+  border: 1px solid rgba(146, 223, 241, 0.24);
+  border-radius: 15px;
   background:
-    radial-gradient(circle at 50% 30%, rgba(103, 213, 246, 0.22), transparent 62%),
-    rgba(7, 31, 40, 0.84);
-  box-shadow: 0 0 24px rgba(103, 213, 246, 0.12);
+    radial-gradient(circle at 50% 30%, rgba(103, 213, 246, 0.26), transparent 62%),
+    rgba(7, 31, 40, 0.86);
+  box-shadow:
+    inset 0 0 20px rgba(103, 213, 246, 0.08),
+    0 0 24px rgba(103, 213, 246, 0.14);
+}
+
+.toby-nav-brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  background: linear-gradient(
+    120deg,
+    transparent 30%,
+    rgba(255, 248, 230, 0.26),
+    transparent 70%
+  );
+  transform: translateX(-80%) rotate(12deg);
+  animation: toby-nav-shine 5.4s ease-in-out infinite;
 }
 
 .toby-nav-brand-mark img {
@@ -2150,25 +2180,36 @@ img {
   object-fit: cover;
 }
 
+.toby-nav-brand-copy {
+  min-width: 0;
+}
+
 .toby-nav-brand strong,
 .toby-nav-brand small {
   display: block;
 }
 
 .toby-nav-brand strong {
+  color: #fff8e6;
   font-size: 13px;
   font-weight: 950;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
+  line-height: 1;
   text-transform: uppercase;
 }
 
 .toby-nav-brand small {
-  margin-top: 1px;
+  max-width: 180px;
+  margin-top: 4px;
+  overflow: hidden;
   color: #8ddff1;
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.13em;
+  line-height: 1;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .toby-nav-links {
@@ -2176,8 +2217,9 @@ img {
   justify-content: flex-end;
   gap: 7px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding: 3px;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .toby-nav-links::-webkit-scrollbar {
@@ -2185,35 +2227,149 @@ img {
 }
 
 .toby-nav-link {
+  position: relative;
   display: inline-grid;
   grid-template-columns: auto auto;
   gap: 6px;
   align-items: center;
   white-space: nowrap;
-  border: 1px solid rgba(146, 223, 241, 0.13);
+  border: 1px solid rgba(146, 223, 241, 0.14);
   border-radius: 999px;
   padding: 9px 11px;
   color: #c9e8ed;
-  background: rgba(7, 31, 40, 0.62);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(146, 223, 241, 0.08), transparent 65%),
+    rgba(7, 31, 40, 0.64);
   font-size: 11px;
   font-weight: 900;
   text-decoration: none;
+  box-shadow: inset 0 0 14px rgba(146, 223, 241, 0.03);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
 }
 
-.toby-nav-link span {
-  filter: drop-shadow(0 0 10px rgba(141, 233, 255, 0.28));
+.toby-nav-link::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid transparent;
+}
+
+.toby-nav-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(249, 201, 104, 0.28);
+  color: #fff8e6;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.toby-nav-link.is-active {
+  color: #061419;
+  border-color: transparent;
+  background: linear-gradient(135deg, #f8d77d, #8de9ff);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.24),
+    0 0 22px rgba(141, 233, 255, 0.12);
+}
+
+.toby-nav-link.is-active::before {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.toby-nav-symbol {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(4, 17, 23, 0.38);
+  font-size: 12px;
+  line-height: 1;
+  filter: drop-shadow(0 0 10px rgba(141, 233, 255, 0.2));
+}
+
+.toby-nav-link.is-active .toby-nav-symbol {
+  background: rgba(4, 17, 23, 0.14);
 }
 
 .toby-nav-link b {
   font: inherit;
 }
 
-.toby-nav-link:hover,
-.toby-nav-link.is-active {
-  color: #061419;
-  border-color: transparent;
-  background: linear-gradient(135deg, #f8d77d, #8de9ff);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+.toby-nav-link.accent-red .toby-nav-symbol {
+  color: #ff6b5f;
+}
+
+.toby-nav-link.accent-green .toby-nav-symbol {
+  color: #a8e984;
+}
+
+.toby-nav-link.accent-blue .toby-nav-symbol {
+  color: #8de9ff;
+}
+
+.toby-nav-link.accent-gold .toby-nav-symbol,
+.toby-nav-link.accent-relic .toby-nav-symbol {
+  color: #ffe3a0;
+}
+
+@media (max-width: 720px) {
+  .toby-nav-inner {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .toby-nav-brand {
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+
+  .toby-nav-links {
+    justify-content: flex-start;
+    margin-inline: -3px;
+  }
+}
+
+@media (max-width: 460px) {
+  .toby-nav {
+    padding-inline: 8px;
+  }
+
+  .toby-nav-brand-mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 14px;
+  }
+
+  .toby-nav-link {
+    gap: 5px;
+    padding: 8px 9px;
+    font-size: 10px;
+  }
+
+  .toby-nav-symbol {
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+  }
+}
+
+@keyframes toby-nav-shine {
+  0%,
+  72%,
+  100% {
+    transform: translateX(-90%) rotate(12deg);
+  }
+
+  82% {
+    transform: translateX(90%) rotate(12deg);
+  }
 }
 
 /* -------------------------------------------------------------------------- */
