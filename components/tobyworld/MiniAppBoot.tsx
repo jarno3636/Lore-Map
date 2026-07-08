@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
 
-export type MiniAppRuntime = {
+type MiniAppIdentity = {
   isMiniApp: boolean;
   supportsComposeCast: boolean;
   displayName?: string;
@@ -11,54 +11,63 @@ export type MiniAppRuntime = {
   fid?: number;
 };
 
-const EMPTY_RUNTIME: MiniAppRuntime = {
-  isMiniApp: false,
-  supportsComposeCast: false,
+type MiniAppBootProps = {
+  onReady?: (identity: MiniAppIdentity) => void;
 };
 
-/**
- * Detects Farcaster only on the client, exposes safe display context for UI,
- * and hides the host splash screen once the app is ready.
- *
- * The returned profile display context must never be used as authentication.
- * Use Quick Auth on the server for authenticated requests.
- */
-export function useMiniAppRuntime(): MiniAppRuntime {
-  const [runtime, setRuntime] = useState<MiniAppRuntime>(EMPTY_RUNTIME);
-
+export function MiniAppBoot({ onReady }: MiniAppBootProps) {
   useEffect(() => {
     let cancelled = false;
 
-    async function boot() {
+    async function bootMiniApp() {
       try {
         const isMiniApp = await sdk.isInMiniApp();
-        if (cancelled || !isMiniApp) return;
 
-        const context = sdk.context;
-        const capabilities = await sdk.getCapabilities();
+        if (!isMiniApp) {
+          if (!cancelled) {
+            onReady?.({
+              isMiniApp: false,
+              supportsComposeCast: false,
+            });
+          }
 
-        await sdk.actions.ready();
+          return;
+        }
+
+        const [context, capabilities] = await Promise.all([
+          sdk.context,
+          sdk.getCapabilities(),
+        ]);
 
         if (cancelled) return;
 
-        setRuntime({
+        onReady?.({
           isMiniApp: true,
           supportsComposeCast: capabilities.includes('actions.composeCast'),
           displayName: context.user?.displayName,
           handle: context.user?.username,
           fid: context.user?.fid,
         });
-      } catch {
-        // Regular browser / Base App path: standard wallet connection remains available.
+
+        await sdk.actions.ready();
+      } catch (error) {
+        console.error('Unable to initialize Farcaster Mini App context:', error);
+
+        if (!cancelled) {
+          onReady?.({
+            isMiniApp: false,
+            supportsComposeCast: false,
+          });
+        }
       }
     }
 
-    void boot();
+    void bootMiniApp();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onReady]);
 
-  return runtime;
+  return null;
 }
