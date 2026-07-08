@@ -58,7 +58,7 @@ type RuntimeProfileFields = {
   } | null;
 };
 
-const SHARE_VERSION = 'daily-v3';
+const SHARE_VERSION = 'daily-v4';
 
 function getOrigin() {
   if (typeof window === 'undefined') {
@@ -137,6 +137,17 @@ function getRiteSymbolClass(rite: DailyRite) {
   return '';
 }
 
+function getNextMark(streak: number) {
+  if (streak < 1) return { label: 'Still-Water Tender', remaining: 1 - streak };
+  if (streak < 3) return { label: 'Leaf Binder', remaining: 3 - streak };
+  if (streak < 5) return { label: 'Current Walker', remaining: 5 - streak };
+  if (streak < 7) return { label: 'Rootbed Seeker', remaining: 7 - streak };
+  if (streak < 14) return { label: 'Bedrock Keeper', remaining: 14 - streak };
+  if (streak < 30) return { label: 'Gate Watcher', remaining: 30 - streak };
+
+  return { label: 'The pond only deepens from here.', remaining: 0 };
+}
+
 async function readJsonResponse(response: Response) {
   try {
     return (await response.json()) as DailyRiteResponse;
@@ -174,6 +185,8 @@ export function DailyPondRite() {
   const rite = data?.rite ?? getPlaceholderRite();
   const canPersist = Boolean(miniApp.isMiniApp && quickAuthFetch);
   const shareText = data?.shareText ?? null;
+  const streak = data?.streak ?? 0;
+  const nextMark = getNextMark(streak);
 
   const statusCopy = useMemo(() => {
     if (!miniApp.isMiniApp) {
@@ -248,6 +261,16 @@ export function DailyPondRite() {
     try {
       const response = await authFetch(getApiUrl('/api/tobyworld/daily-rite'), {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          profile: {
+            username: profile.handle,
+            displayName: profile.displayName,
+            pfpUrl: profile.pfpUrl,
+          },
+        }),
       });
 
       const nextData = await readJsonResponse(response);
@@ -312,8 +335,13 @@ export function DailyPondRite() {
   }
 
   return (
-    <section className="daily-pond" aria-label="Daily Tobyworld Pond Rite">
+    <section
+      className={`daily-pond ${data?.completedToday ? 'is-complete' : 'needs-rite'}`}
+      aria-label="Daily Tobyworld Pond Rite"
+    >
       <div className="daily-pond-glow" aria-hidden="true" />
+      <div className="daily-pond-ripple daily-pond-ripple-one" aria-hidden="true" />
+      <div className="daily-pond-ripple daily-pond-ripple-two" aria-hidden="true" />
 
       <header className="daily-pond-header">
         <div>
@@ -356,6 +384,18 @@ export function DailyPondRite() {
         </div>
       </div>
 
+      <div className="daily-pond-status-strip">
+        <span className={data?.completedToday ? 'is-lit' : ''}>△</span>
+        <i />
+        <span className={streak >= 1 ? 'is-lit' : ''}>🐸</span>
+        <i />
+        <span className={streak >= 3 ? 'is-lit' : ''}>🍃</span>
+        <i />
+        <span className={streak >= 5 ? 'is-lit' : ''}>🌀</span>
+        <i />
+        <span className={streak >= 7 ? 'is-lit' : ''}>✦</span>
+      </div>
+
       <div className="daily-pond-stats">
         <div>
           <strong>{data?.streak ?? 0}</strong>
@@ -371,9 +411,21 @@ export function DailyPondRite() {
         </div>
       </div>
 
-      <div className="daily-pond-mark">
-        <span>CURRENT MARK</span>
-        <strong>{data?.mark ?? 'Pond Visitor'}</strong>
+      <div className="daily-pond-mark-grid">
+        <div className="daily-pond-mark">
+          <span>CURRENT MARK</span>
+          <strong>{data?.mark ?? 'Pond Visitor'}</strong>
+        </div>
+
+        <div className="daily-pond-next-mark">
+          <span>NEXT MARK</span>
+          <strong>{nextMark.label}</strong>
+          <small>
+            {nextMark.remaining > 0
+              ? `${nextMark.remaining} more rite${nextMark.remaining === 1 ? '' : 's'}`
+              : 'Keep the pond alive.'}
+          </small>
+        </div>
       </div>
 
       <div className="daily-pond-actions">
@@ -387,7 +439,7 @@ export function DailyPondRite() {
             ? 'Saving rite…'
             : data?.completedToday
               ? 'Rite Complete'
-              : 'Complete Today’s Rite ✦'}
+              : 'Complete Today’s Rite △'}
         </button>
 
         <button type="button" onClick={shareToFarcaster} disabled={!shareText}>
@@ -408,6 +460,17 @@ export function DailyPondRite() {
           {shareText}
         </pre>
       )}
+
+      <div className="daily-pond-attention">
+        <span>{data?.completedToday ? '✓' : '!'}</span>
+        <p>
+          {data?.completedToday
+            ? 'Your echo was saved. Visit the Community Shrine to see the pond answer back.'
+            : canPersist
+              ? 'Needs attention: today’s rite is still waiting.'
+              : 'Needs attention: open inside Farcaster so the rite can save to your FID.'}
+        </p>
+      </div>
 
       {notice && (
         <p className="daily-pond-notice" role="status">
