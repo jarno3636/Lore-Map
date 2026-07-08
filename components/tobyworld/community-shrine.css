@@ -558,3 +558,35 @@
     opacity: 0.54;
   }
 }
+.community-shrine-avatar-rail:has(.community-shrine-avatar:only-child) {
+  justify-content: center;
+  min-height: 92px;
+}
+
+.community-shrine-avatar-rail:has(.community-shrine-avatar:only-child) .community-shrine-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 24px;
+}
+
+.community-shrine-avatar-rail:has(.community-shrine-avatar:only-child) .community-shrine-avatar img {
+  border-radius: 23px;
+}
+
+.community-shrine-avatar-rail:has(.community-shrine-avatar:only-child) .community-shrine-avatar > span {
+  font-size: 30px;
+}
+
+.community-shrine-feature-copy h3 {
+  font-size: clamp(28px, 8vw, 48px);
+}
+
+.community-shrine-copy small,
+.community-shrine-feature-copy small {
+  color: #a8c5cc;
+}
+
+.community-shrine-copy small:empty,
+.community-shrine-feature-copy small:empty {
+  display: none;
+}
