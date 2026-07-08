@@ -1,125 +1,69 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-static';
 
-type AccountAssociation = {
-  header: string;
-  payload: string;
-  signature: string;
+const appUrl = 'https://toby-atlas.vercel.app';
+
+const accountAssociation = {
+  header:
+    'eyJmaWQiOjExMjExOTMsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHhmNTYwMzNDMTkxYjY2NTA0QWQ0Q0Y4NzMyM0E3NzNGRDg2RGM1MGFkIn0',
+  payload: 'eyJkb21haW4iOiJ0b2J5LWF0bGFzLnZlcmNlbC5hcHAifQ',
+  signature:
+    '2VnJFkiePx8ykg+ykaQ1/864gvDxUWitn/b5OMyMN+IVf4IGYuxrpJoErQ6tRNVPCqM5RAQ5M4u8pS0TQuB/Vhs=',
 };
 
-function cleanUrl(value: string) {
-  return value.trim().replace(/\/+$/, '');
-}
+const miniapp = {
+  version: '1',
+  name: 'Tobyworld Atlas',
+  homeUrl: appUrl,
 
-function getManifestConfig() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  iconUrl: `${appUrl}/images/atlas/toby-pond-guardian.png`,
+  splashImageUrl: `${appUrl}/images/atlas/toby-pond-guardian.png`,
+  splashBackgroundColor: '#07171f',
 
-  const accountAssociation: AccountAssociation = {
-    header: process.env.FARCASTER_ACCOUNT_ASSOCIATION_HEADER ?? '',
-    payload: process.env.FARCASTER_ACCOUNT_ASSOCIATION_PAYLOAD ?? '',
-    signature: process.env.FARCASTER_ACCOUNT_ASSOCIATION_SIGNATURE ?? '',
-  };
+  subtitle: 'Read the living flywheel',
+  description:
+    'Explore Tobyworld lore, discover your private signal, and move through the living flywheel.',
 
-  return {
-    appUrl: appUrl ? cleanUrl(appUrl) : '',
-    accountAssociation,
-  };
-}
+  primaryCategory: 'social',
+
+  tags: ['tobyworld', 'toby', 'base', 'lore', 'atlas'],
+
+  heroImageUrl: `${appUrl}/miniapp/tobyworld-og-image.png`,
+
+  tagline: 'Plant stillness tend the world',
+  ogTitle: 'Tobyworld Atlas',
+  ogDescription: 'Explore the living flywheel of Tobyworld.',
+  ogImageUrl: `${appUrl}/miniapp/tobyworld-og-image.png`,
+
+  noindex: false,
+  canonicalDomain: 'toby-atlas.vercel.app',
+  requiredChains: ['eip155:8453'],
+};
 
 export async function GET() {
-  const { appUrl, accountAssociation } = getManifestConfig();
-
-  const missingAssociation =
-    !accountAssociation.header ||
-    !accountAssociation.payload ||
-    !accountAssociation.signature;
-
-  if (!appUrl || missingAssociation) {
-    return NextResponse.json(
-      {
-        error: 'Farcaster manifest is not configured.',
-        requiredEnvironmentVariables: [
-          'NEXT_PUBLIC_APP_URL',
-          'FARCASTER_ACCOUNT_ASSOCIATION_HEADER',
-          'FARCASTER_ACCOUNT_ASSOCIATION_PAYLOAD',
-          'FARCASTER_ACCOUNT_ASSOCIATION_SIGNATURE',
-        ],
-      },
-      {
-        status: 503,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      }
-    );
-  }
-
-  let parsedUrl: URL;
-
-  try {
-    parsedUrl = new URL(appUrl);
-  } catch {
-    return NextResponse.json(
-      {
-        error:
-          'NEXT_PUBLIC_APP_URL must be a full HTTPS URL, such as https://yourdomain.com.',
-      },
-      {
-        status: 503,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      }
-    );
-  }
-
-  if (parsedUrl.protocol !== 'https:') {
-    return NextResponse.json(
-      {
-        error: 'Farcaster Mini Apps require an HTTPS production URL.',
-      },
-      {
-        status: 503,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      }
-    );
-  }
-
-  const canonicalDomain = parsedUrl.hostname;
-
   return NextResponse.json(
     {
       accountAssociation,
 
-      miniapp: {
+      /*
+        Current Farcaster Mini App field.
+      */
+      miniapp,
+
+      /*
+        Legacy compatibility field.
+        Keeping this helps older clients that still look for frame.
+      */
+      frame: {
         version: '1',
-        name: 'Tobyworld Atlas',
-        homeUrl: appUrl,
-
-        iconUrl: `${appUrl}/miniapp/tobyworld-app-icon.png`,
-        splashImageUrl: `${appUrl}/miniapp/tobyworld-splash-icon.png`,
-        splashBackgroundColor: '#07171f',
-
-        subtitle: 'Read the living flywheel',
-        description:
-          'Explore Tobyworld lore, discover your signal, and move through the living flywheel.',
-        primaryCategory: 'social',
-
-        tags: ['tobyworld', 'toby', 'base', 'lore', 'atlas'],
-
-        heroImageUrl: `${appUrl}/miniapp/tobyworld-og-image.png`,
-
-        tagline: 'Plant stillness tend the world',
-        ogTitle: 'Tobyworld Atlas',
-        ogDescription: 'Explore the living flywheel of Tobyworld.',
-        ogImageUrl: `${appUrl}/miniapp/tobyworld-og-image.png`,
-
-        noindex: false,
-        canonicalDomain,
-        requiredChains: ['eip155:8453'],
+        name: miniapp.name,
+        iconUrl: miniapp.iconUrl,
+        homeUrl: miniapp.homeUrl,
+        imageUrl: miniapp.ogImageUrl,
+        buttonTitle: 'Enter Tobyworld',
+        splashImageUrl: miniapp.splashImageUrl,
+        splashBackgroundColor: miniapp.splashBackgroundColor,
       },
     },
     {
@@ -127,6 +71,6 @@ export async function GET() {
         'Cache-Control':
           'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
       },
-    }
+    },
   );
 }
