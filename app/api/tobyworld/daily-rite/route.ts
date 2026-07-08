@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireFarcasterFid } from '@/lib/farcaster/quick-auth';
-import { supabaseAdmin } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+
+export const dynamic = 'force-dynamic';
 
 type DailyRiteRow = {
   fid: number;
@@ -9,8 +11,6 @@ type DailyRiteRow = {
   total_completions: number;
   last_completed_on: string | null;
   current_mark: string;
-  created_at?: string;
-  updated_at?: string;
 };
 
 const DAILY_RITES = [
@@ -49,7 +49,21 @@ const DAILY_RITES = [
     instruction: 'Carry one line from the pond beyond the gate.',
     completedLine: '✦ A fragment left the pond.',
   },
-];
+] as const;
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return 'Unknown server error.';
+}
 
 function getTodayUtc() {
   return new Date().toISOString().slice(0, 10);
@@ -63,8 +77,7 @@ function getYesterdayUtc(today: string) {
 
 function getRiteForDate(date: string) {
   const seed = date
-    .split('-')
-    .join('')
+    .replaceAll('-', '')
     .split('')
     .reduce((sum, char) => sum + Number(char), 0);
 
@@ -104,140 +117,166 @@ function buildShareText({
 }
 
 async function getProfile(fid: number) {
-  const { data, error } = await supabaseAdmin
+  const supabase = getSupabaseAdmin();
+
+  const { data, error } = await supabase
     .from('tobyworld_daily_rites')
     .select('*')
     .eq('fid', fid)
-    .maybeSingle<DailyRiteRow>();
+    .maybeSingle();
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(`Supabase profile read failed: ${error.message}`);
   }
 
-  return data;
+  return data as DailyRiteRow | null;
 }
 
 export async function GET(request: Request) {
-  const auth = await requireFarcasterFid(request);
+  try {
+    const auth = await requireFarcasterFid(request);
 
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    if (!auth.ok) {
+      return json({ error: auth.error }, auth.status);
+    }
+
+    const today = getTodayUtc();
+    const rite = getRiteForDate(today);
+    const profile = await getProfile(auth.fid);
+
+    const completedToday = profile?.last_completed_on === today;
+    const streak = profile?.streak_count ?? 0;
+    const total = profile?.total_completions ?? 0;
+    const mark = profile?.current_mark ?? getMark(streak, total);
+
+    return json({
+      fid: auth.fid,
+      today,
+      rite,
+      completedToday,
+      streak,
+      bestStreak: profile?.best_streak ?? 0,
+      totalCompletions: total,
+      mark,
+      shareText: completedToday
+        ? buildShareText({
+            rite,
+            streak,
+            mark,
+          })
+        : null,
+    });
+  } catch (error) {
+    console.error('Daily rite GET failed:', error);
+
+    return json(
+      {
+        error: getErrorMessage(error),
+      },
+      500,
+    );
   }
-
-  const today = getTodayUtc();
-  const rite = getRiteForDate(today);
-  const profile = await getProfile(auth.fid);
-
-  const completedToday = profile?.last_completed_on === today;
-  const streak = profile?.streak_count ?? 0;
-  const total = profile?.total_completions ?? 0;
-  const mark = profile?.current_mark ?? getMark(streak, total);
-
-  return NextResponse.json({
-    fid: auth.fid,
-    today,
-    rite,
-    completedToday,
-    streak,
-    bestStreak: profile?.best_streak ?? 0,
-    totalCompletions: total,
-    mark,
-    shareText: completedToday
-      ? buildShareText({
-          rite,
-          streak,
-          mark,
-        })
-      : null,
-  });
 }
 
 export async function POST(request: Request) {
-  const auth = await requireFarcasterFid(request);
+  try {
+    const auth = await requireFarcasterFid(request);
 
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
+    if (!auth.ok) {
+      return json({ error: auth.error }, auth.status);
+    }
 
-  const today = getTodayUtc();
-  const yesterday = getYesterdayUtc(today);
-  const rite = getRiteForDate(today);
+    const supabase = getSupabaseAdmin();
 
-  const profile = await getProfile(auth.fid);
+    const today = getTodayUtc();
+    const yesterday = getYesterdayUtc(today);
+    const rite = getRiteForDate(today);
 
-  if (profile?.last_completed_on === today) {
+    const profile = await getProfile(auth.fid);
+
+    if (profile?.last_completed_on === today) {
+      const shareText = buildShareText({
+        rite,
+        streak: profile.streak_count,
+        mark: profile.current_mark,
+      });
+
+      return json({
+        fid: auth.fid,
+        today,
+        rite,
+        completedToday: true,
+        streak: profile.streak_count,
+        bestStreak: profile.best_streak,
+        totalCompletions: profile.total_completions,
+        mark: profile.current_mark,
+        shareText,
+      });
+    }
+
+    const previousStreak = profile?.streak_count ?? 0;
+    const previousTotal = profile?.total_completions ?? 0;
+    const nextStreak = profile?.last_completed_on === yesterday ? previousStreak + 1 : 1;
+    const nextTotal = previousTotal + 1;
+    const nextBestStreak = Math.max(profile?.best_streak ?? 0, nextStreak);
+    const nextMark = getMark(nextStreak, nextTotal);
+
     const shareText = buildShareText({
       rite,
-      streak: profile.streak_count,
-      mark: profile.current_mark,
+      streak: nextStreak,
+      mark: nextMark,
     });
 
-    return NextResponse.json({
+    const { error: eventError } = await supabase.from('tobyworld_rite_events').insert({
+      fid: auth.fid,
+      rite_date: today,
+      rite_key: rite.key,
+      mark: nextMark,
+      share_text: shareText,
+    });
+
+    if (eventError && eventError.code !== '23505') {
+      throw new Error(`Supabase event insert failed: ${eventError.message}`);
+    }
+
+    const { error: profileError } = await supabase.from('tobyworld_daily_rites').upsert(
+      {
+        fid: auth.fid,
+        streak_count: nextStreak,
+        best_streak: nextBestStreak,
+        total_completions: nextTotal,
+        last_completed_on: today,
+        current_mark: nextMark,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'fid',
+      },
+    );
+
+    if (profileError) {
+      throw new Error(`Supabase profile upsert failed: ${profileError.message}`);
+    }
+
+    return json({
       fid: auth.fid,
       today,
       rite,
       completedToday: true,
-      streak: profile.streak_count,
-      bestStreak: profile.best_streak,
-      totalCompletions: profile.total_completions,
-      mark: profile.current_mark,
+      streak: nextStreak,
+      bestStreak: nextBestStreak,
+      totalCompletions: nextTotal,
+      mark: nextMark,
       shareText,
     });
+  } catch (error) {
+    console.error('Daily rite POST failed:', error);
+
+    return json(
+      {
+        error: getErrorMessage(error),
+      },
+      500,
+    );
   }
-
-  const previousStreak = profile?.streak_count ?? 0;
-  const previousTotal = profile?.total_completions ?? 0;
-  const nextStreak = profile?.last_completed_on === yesterday ? previousStreak + 1 : 1;
-  const nextTotal = previousTotal + 1;
-  const nextBestStreak = Math.max(profile?.best_streak ?? 0, nextStreak);
-  const nextMark = getMark(nextStreak, nextTotal);
-
-  const shareText = buildShareText({
-    rite,
-    streak: nextStreak,
-    mark: nextMark,
-  });
-
-  const { error: eventError } = await supabaseAdmin.from('tobyworld_rite_events').insert({
-    fid: auth.fid,
-    rite_date: today,
-    rite_key: rite.key,
-    mark: nextMark,
-    share_text: shareText,
-  });
-
-  if (eventError && !eventError.message.toLowerCase().includes('duplicate')) {
-    throw new Error(eventError.message);
-  }
-
-  const { error: profileError } = await supabaseAdmin.from('tobyworld_daily_rites').upsert(
-    {
-      fid: auth.fid,
-      streak_count: nextStreak,
-      best_streak: nextBestStreak,
-      total_completions: nextTotal,
-      last_completed_on: today,
-      current_mark: nextMark,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      onConflict: 'fid',
-    },
-  );
-
-  if (profileError) {
-    throw new Error(profileError.message);
-  }
-
-  return NextResponse.json({
-    fid: auth.fid,
-    today,
-    rite,
-    completedToday: true,
-    streak: nextStreak,
-    bestStreak: nextBestStreak,
-    totalCompletions: nextTotal,
-    mark: nextMark,
-    shareText,
-  });
 }
