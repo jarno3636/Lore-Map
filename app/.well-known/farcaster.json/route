@@ -1,0 +1,146 @@
+import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
+type AccountAssociation = {
+  header: string;
+  payload: string;
+  signature: string;
+};
+
+function cleanUrl(value: string) {
+  return value.trim().replace(/\/+$/, '');
+}
+
+function getManifestConfig() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  const accountAssociation: AccountAssociation = {
+    header: process.env.FARCASTER_ACCOUNT_ASSOCIATION_HEADER ?? '',
+    payload: process.env.FARCASTER_ACCOUNT_ASSOCIATION_PAYLOAD ?? '',
+    signature: process.env.FARCASTER_ACCOUNT_ASSOCIATION_SIGNATURE ?? '',
+  };
+
+  return {
+    appUrl: appUrl ? cleanUrl(appUrl) : '',
+    accountAssociation,
+  };
+}
+
+export async function GET() {
+  const { appUrl, accountAssociation } = getManifestConfig();
+
+  const missingAssociation =
+    !accountAssociation.header ||
+    !accountAssociation.payload ||
+    !accountAssociation.signature;
+
+  if (!appUrl || missingAssociation) {
+    return NextResponse.json(
+      {
+        error: 'Farcaster manifest is not configured.',
+        requiredEnvironmentVariables: [
+          'NEXT_PUBLIC_APP_URL',
+          'FARCASTER_ACCOUNT_ASSOCIATION_HEADER',
+          'FARCASTER_ACCOUNT_ASSOCIATION_PAYLOAD',
+          'FARCASTER_ACCOUNT_ASSOCIATION_SIGNATURE'
+        ]
+      },
+      {
+        status: 503,
+        headers: {
+          'Cache-Control': 'no-store'
+        }
+      }
+    );
+  }
+
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(appUrl);
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          'NEXT_PUBLIC_APP_URL must be a full HTTPS URL, such as https://yourdomain.com.'
+      },
+      {
+        status: 503,
+        headers: {
+          'Cache-Control': 'no-store'
+        }
+      }
+    );
+  }
+
+  if (parsedUrl.protocol !== 'https:') {
+    return NextResponse.json(
+      {
+        error: 'Farcaster Mini Apps require an HTTPS production URL.'
+      },
+      {
+        status: 503,
+        headers: {
+          'Cache-Control': 'no-store'
+        }
+      }
+    );
+  }
+
+  const canonicalDomain = parsedUrl.hostname;
+
+  return NextResponse.json(
+    {
+      accountAssociation,
+
+      miniapp: {
+        version: '1',
+
+        name: 'Tobyworld Atlas',
+        homeUrl: appUrl,
+
+        /*
+          Must be a 1024x1024 PNG with no alpha channel.
+          Your current generated Toby image works well for this.
+        */
+        iconUrl: `${appUrl}/images/atlas/toby-pond-guardian.png`,
+
+        /*
+          A splash image is optional. Leave it out until you make
+          a proper 200x200 PNG splash asset.
+        */
+        splashBackgroundColor: '#07171f',
+
+        subtitle: 'Read the living flywheel',
+
+        description:
+          'Explore Tobyworld lore, follow the living flywheel, discover your private asset signal, and share a mythic profile.',
+
+        primaryCategory: 'social',
+
+        tags: [
+          'tobyworld',
+          'toby',
+          'base',
+          'lore',
+          'atlas'
+        ],
+
+        tagline: 'Plant stillness tend the world',
+
+        noindex: false,
+
+        canonicalDomain,
+
+        requiredChains: ['eip155:8453']
+      }
+    },
+    {
+      headers: {
+        'Cache-Control':
+          'public, max-age=0, s-maxage=300, stale-while-revalidate=86400'
+      }
+    }
+  );
+}
