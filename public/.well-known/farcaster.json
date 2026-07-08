@@ -23,15 +23,5 @@
     "noindex": false,
     "canonicalDomain": "toby-atlas.vercel.app",
     "requiredChains": ["eip155:8453"]
-  },
-  "frame": {
-    "version": "1",
-    "name": "Tobyworld Atlas",
-    "iconUrl": "https://toby-atlas.vercel.app/images/atlas/toby-pond-guardian.png",
-    "homeUrl": "https://toby-atlas.vercel.app",
-    "imageUrl": "https://toby-atlas.vercel.app/miniapp/tobyworld-og-image.png",
-    "buttonTitle": "Enter Tobyworld",
-    "splashImageUrl": "https://toby-atlas.vercel.app/images/atlas/toby-pond-guardian.png",
-    "splashBackgroundColor": "#07171f"
   }
 }
