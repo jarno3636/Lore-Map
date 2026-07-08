@@ -21,8 +21,8 @@ export default function CommunityPage() {
         </h1>
 
         <p>
-          Every echo here comes from a saved Farcaster FID. Complete the Daily Rite,
-          build your streak, and leave your mark in the pond.
+          Recent echoes from frogs returning to the pond. Complete the Daily Rite,
+          build your streak, and let your profile leave a mark in Tobyworld.
         </p>
 
         <div className="home-ritual-line" aria-label="Tobyworld community path">
