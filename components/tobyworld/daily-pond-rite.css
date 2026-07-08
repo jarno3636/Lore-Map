@@ -82,25 +82,57 @@
   line-height: 1.55;
 }
 
-.daily-pond-date {
+.daily-pond-user-card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 11px;
+  align-items: center;
   width: fit-content;
+  min-width: 188px;
   border: 1px solid rgba(249, 201, 104, 0.24);
-  border-radius: 18px;
-  padding: 12px 14px;
-  background: rgba(35, 28, 18, 0.42);
+  border-radius: 22px;
+  padding: 11px 13px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(103, 213, 246, 0.12), transparent 38%),
+    rgba(35, 28, 18, 0.42);
 }
 
-.daily-pond-date strong,
-.daily-pond-date small {
+.daily-pond-pfp {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(220, 250, 255, 0.2);
+  border-radius: 15px;
+  background: rgba(7, 31, 40, 0.8);
+  box-shadow: 0 0 22px rgba(103, 213, 246, 0.16);
+}
+
+.daily-pond-pfp img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.daily-pond-pfp span {
+  font-size: 22px;
+}
+
+.daily-pond-user-card strong,
+.daily-pond-user-card small {
   display: block;
 }
 
-.daily-pond-date strong {
+.daily-pond-user-card strong {
   color: #ffe3a0;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.1;
 }
 
-.daily-pond-date small {
+.daily-pond-user-card small {
   margin-top: 3px;
   color: #a6c7ce;
   font-size: 11px;
@@ -133,7 +165,26 @@
 
 .daily-pond-symbol span {
   font-size: 38px;
+  line-height: 1;
   filter: drop-shadow(0 0 16px rgba(136, 228, 255, 0.42));
+}
+
+.daily-pond-symbol.is-red-triangle {
+  border-color: rgba(255, 99, 88, 0.48);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 99, 88, 0.1), transparent 52%),
+    rgba(7, 31, 40, 0.72);
+  box-shadow:
+    inset 0 0 28px rgba(255, 99, 88, 0.06),
+    0 0 28px rgba(255, 99, 88, 0.1);
+}
+
+.daily-pond-symbol.is-red-triangle span {
+  color: transparent;
+  -webkit-text-stroke: 2px #ff5b51;
+  text-stroke: 2px #ff5b51;
+  font-size: 47px;
+  filter: drop-shadow(0 0 14px rgba(255, 91, 81, 0.36));
 }
 
 .daily-pond-copy h3 {
