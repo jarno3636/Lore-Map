@@ -1,5 +1,6 @@
 import { TobyworldAtlas } from '@/components/TobyworldAtlas';
 import { TobyworldSignalProfile } from '@/components/tobyworld/TobyworldSignalProfile';
+import { DailyPondRite } from '@/components/tobyworld/DailyPondRite';
 
 const featureCards = [
   {
@@ -57,11 +58,15 @@ export default function Home() {
 
           <p>
             Toby waits at the center. Patience falls. The leaf grows. The blue
-            current returns.
+            current returns. Come back daily, complete the rite, and let the pond
+            remember.
           </p>
 
           <div className="home-hero-actions">
-            <a href="#atlas" className="home-primary-link">
+            <a href="#daily-rite" className="home-primary-link">
+              Daily Rite
+            </a>
+            <a href="#atlas" className="home-secondary-link">
               Open Atlas
             </a>
             <a href="#pond-role" className="home-secondary-link">
@@ -114,7 +119,7 @@ export default function Home() {
 
             <div className="home-preview-copy">
               <strong>The pond remembers.</strong>
-              <small>Stillness · Bloom · Return</small>
+              <small>Daily Rite · Stillness · Bloom · Return</small>
             </div>
           </div>
         </div>
@@ -131,11 +136,24 @@ export default function Home() {
         ))}
       </section>
 
+      <section id="daily-rite" className="home-section">
+        <div className="home-section-heading">
+          <p className="home-kicker">DAILY RITE</p>
+          <h2>Return once a day.</h2>
+          <p>
+            Complete one small pond ritual, build your streak, earn your mark,
+            and cast the ripple back into the world.
+          </p>
+        </div>
+
+        <DailyPondRite />
+      </section>
+
       <section id="atlas" className="home-section">
         <div className="home-section-heading">
           <p className="home-kicker">ATLAS</p>
           <h2>The living flywheel.</h2>
-          <p>Touch the runes. Wake the pond.</p>
+          <p>Touch the runes. Wake the pond. Open the paths in order.</p>
         </div>
 
         <TobyworldAtlas />
@@ -145,7 +163,10 @@ export default function Home() {
         <div className="home-section-heading">
           <p className="home-kicker">SHRINE</p>
           <h2>Ask the pond.</h2>
-          <p>Reveal the role your path carries.</p>
+          <p>
+            Reveal the role your path carries, then cast your generated
+            Tobyworld quote.
+          </p>
         </div>
 
         <TobyworldSignalProfile />
