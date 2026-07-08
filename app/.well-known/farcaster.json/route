@@ -43,14 +43,14 @@ export async function GET() {
           'NEXT_PUBLIC_APP_URL',
           'FARCASTER_ACCOUNT_ASSOCIATION_HEADER',
           'FARCASTER_ACCOUNT_ASSOCIATION_PAYLOAD',
-          'FARCASTER_ACCOUNT_ASSOCIATION_SIGNATURE'
-        ]
+          'FARCASTER_ACCOUNT_ASSOCIATION_SIGNATURE',
+        ],
       },
       {
         status: 503,
         headers: {
-          'Cache-Control': 'no-store'
-        }
+          'Cache-Control': 'no-store',
+        },
       }
     );
   }
@@ -63,13 +63,13 @@ export async function GET() {
     return NextResponse.json(
       {
         error:
-          'NEXT_PUBLIC_APP_URL must be a full HTTPS URL, such as https://yourdomain.com.'
+          'NEXT_PUBLIC_APP_URL must be a full HTTPS URL, such as https://yourdomain.com.',
       },
       {
         status: 503,
         headers: {
-          'Cache-Control': 'no-store'
-        }
+          'Cache-Control': 'no-store',
+        },
       }
     );
   }
@@ -77,13 +77,13 @@ export async function GET() {
   if (parsedUrl.protocol !== 'https:') {
     return NextResponse.json(
       {
-        error: 'Farcaster Mini Apps require an HTTPS production URL.'
+        error: 'Farcaster Mini Apps require an HTTPS production URL.',
       },
       {
         status: 503,
         headers: {
-          'Cache-Control': 'no-store'
-        }
+          'Cache-Control': 'no-store',
+        },
       }
     );
   }
@@ -96,51 +96,37 @@ export async function GET() {
 
       miniapp: {
         version: '1',
-
         name: 'Tobyworld Atlas',
         homeUrl: appUrl,
 
-        /*
-          Must be a 1024x1024 PNG with no alpha channel.
-          Your current generated Toby image works well for this.
-        */
-        iconUrl: `${appUrl}/images/atlas/toby-pond-guardian.png`,
-
-        /*
-          A splash image is optional. Leave it out until you make
-          a proper 200x200 PNG splash asset.
-        */
+        iconUrl: `${appUrl}/miniapp/tobyworld-app-icon.png`,
+        splashImageUrl: `${appUrl}/miniapp/tobyworld-splash-icon.png`,
         splashBackgroundColor: '#07171f',
 
         subtitle: 'Read the living flywheel',
-
         description:
-          'Explore Tobyworld lore, follow the living flywheel, discover your private asset signal, and share a mythic profile.',
-
+          'Explore Tobyworld lore, discover your signal, and move through the living flywheel.',
         primaryCategory: 'social',
 
-        tags: [
-          'tobyworld',
-          'toby',
-          'base',
-          'lore',
-          'atlas'
-        ],
+        tags: ['tobyworld', 'toby', 'base', 'lore', 'atlas'],
+
+        heroImageUrl: `${appUrl}/miniapp/tobyworld-og-image.png`,
 
         tagline: 'Plant stillness tend the world',
+        ogTitle: 'Tobyworld Atlas',
+        ogDescription: 'Explore the living flywheel of Tobyworld.',
+        ogImageUrl: `${appUrl}/miniapp/tobyworld-og-image.png`,
 
         noindex: false,
-
         canonicalDomain,
-
-        requiredChains: ['eip155:8453']
-      }
+        requiredChains: ['eip155:8453'],
+      },
     },
     {
       headers: {
         'Cache-Control':
-          'public, max-age=0, s-maxage=300, stale-while-revalidate=86400'
-      }
+          'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
+      },
     }
   );
 }
