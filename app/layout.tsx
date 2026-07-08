@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { TobyworldNav } from '@/components/tobyworld/TobyworldNav';
 import { Providers } from './providers';
 import './globals.css';
 
@@ -8,16 +9,11 @@ const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://toby-atlas.vercel.ap
   '',
 );
 
-/*
-  Bump this version whenever your social preview image changes.
-  This helps Farcaster/X pull the fresh image instead of cached broken metadata.
-*/
-const assetVersion = 'v7';
+const assetVersion = 'v8';
 
 const appName = 'Tobyworld Atlas';
 const appDescription = 'Enter the pond. Follow the wheel. Reveal your Tobyworld role.';
 
-const appIconUrl = `${appUrl}/miniapp/tobyworld-app-icon.png`;
 const splashIconUrl = `${appUrl}/miniapp/tobyworld-splash-icon.png`;
 const shareImageUrl = `${appUrl}/miniapp/tobyworld-og-image.png?${assetVersion}`;
 
@@ -101,10 +97,6 @@ export const metadata: Metadata = {
   },
 
   other: {
-    /*
-      Farcaster Mini App embed metadata.
-      Keep both for compatibility.
-    */
     'fc:miniapp': JSON.stringify(miniAppEmbed),
     'fc:frame': JSON.stringify(miniAppEmbed),
   },
@@ -123,7 +115,10 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          <TobyworldNav />
+          {children}
+        </Providers>
       </body>
     </html>
   );
