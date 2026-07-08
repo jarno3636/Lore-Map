@@ -21,7 +21,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.28;
+  opacity: 0.22;
   background-image: radial-gradient(circle, rgba(237, 255, 255, 0.72) 0 1px, transparent 2px);
   background-size: 46px 52px;
   animation: daily-pond-stars 28s linear infinite;
@@ -38,12 +38,39 @@
   filter: blur(10px);
 }
 
+.daily-pond-ripple {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid rgba(141, 233, 255, 0.14);
+  border-radius: 999px;
+  opacity: 0.44;
+}
+
+.daily-pond-ripple-one {
+  width: 260px;
+  height: 260px;
+  left: -110px;
+  bottom: -110px;
+  animation: daily-pond-pulse 5.8s ease-in-out infinite;
+}
+
+.daily-pond-ripple-two {
+  width: 160px;
+  height: 160px;
+  right: 16px;
+  bottom: 28px;
+  border-color: rgba(249, 201, 104, 0.14);
+  animation: daily-pond-pulse 6.8s ease-in-out infinite reverse;
+}
+
 .daily-pond-header,
 .daily-pond-card,
+.daily-pond-status-strip,
 .daily-pond-stats,
-.daily-pond-mark,
+.daily-pond-mark-grid,
 .daily-pond-actions,
 .daily-pond-preview,
+.daily-pond-attention,
 .daily-pond-notice {
   position: relative;
   z-index: 1;
@@ -56,12 +83,14 @@
 
 .daily-pond-header p,
 .daily-pond-card p,
-.daily-pond-mark span {
+.daily-pond-mark span,
+.daily-pond-next-mark span {
   margin: 0;
   color: #8ddff1;
   font-size: 11px;
   font-weight: 950;
   letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .daily-pond-header h2 {
@@ -83,14 +112,12 @@
 }
 
 .daily-pond-user-card {
-  position: relative;
-  z-index: 1;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 11px;
   align-items: center;
   width: fit-content;
-  min-width: 188px;
+  max-width: 100%;
   border: 1px solid rgba(249, 201, 104, 0.24);
   border-radius: 22px;
   padding: 11px 13px;
@@ -196,6 +223,47 @@
   letter-spacing: -0.05em;
 }
 
+.daily-pond-status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  border: 1px solid rgba(146, 223, 241, 0.14);
+  border-radius: 999px;
+  padding: 9px;
+  background: rgba(4, 21, 28, 0.48);
+}
+
+.daily-pond-status-strip span {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 1px solid rgba(220, 250, 255, 0.13);
+  border-radius: 12px;
+  color: #8aaeb6;
+  background: rgba(7, 31, 40, 0.64);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.daily-pond-status-strip span.is-lit {
+  color: #fff8e6;
+  border-color: rgba(249, 201, 104, 0.24);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(249, 201, 104, 0.16), transparent 62%),
+    rgba(7, 31, 40, 0.72);
+  filter: drop-shadow(0 0 10px rgba(249, 201, 104, 0.24));
+}
+
+.daily-pond-status-strip i {
+  display: block;
+  width: 10px;
+  height: 1px;
+  background: rgba(146, 223, 241, 0.18);
+}
+
 .daily-pond-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -228,21 +296,54 @@
   text-transform: uppercase;
 }
 
-.daily-pond-mark {
+.daily-pond-mark-grid {
+  display: grid;
+  gap: 10px;
   margin-top: 14px;
-  border: 1px solid rgba(249, 201, 104, 0.22);
+}
+
+.daily-pond-mark,
+.daily-pond-next-mark {
+  min-width: 0;
   border-radius: 20px;
   padding: 14px;
+}
+
+.daily-pond-mark {
+  border: 1px solid rgba(249, 201, 104, 0.22);
   background: rgba(35, 28, 18, 0.46);
 }
 
-.daily-pond-mark strong {
+.daily-pond-next-mark {
+  border: 1px solid rgba(146, 223, 241, 0.16);
+  background: rgba(4, 21, 28, 0.48);
+}
+
+.daily-pond-mark strong,
+.daily-pond-next-mark strong {
   display: block;
   margin-top: 5px;
-  color: #ffe3a0;
   font-family: Georgia, serif;
-  font-size: 25px;
-  letter-spacing: -0.03em;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+
+.daily-pond-mark strong {
+  color: #ffe3a0;
+  font-size: clamp(25px, 8vw, 42px);
+}
+
+.daily-pond-next-mark strong {
+  color: #e8fbff;
+  font-size: clamp(21px, 6vw, 30px);
+}
+
+.daily-pond-next-mark small {
+  display: block;
+  margin-top: 7px;
+  color: #98b9c0;
+  font-size: 12px;
 }
 
 .daily-pond-actions {
@@ -293,6 +394,54 @@
   line-height: 1.35;
 }
 
+.daily-pond-attention {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+  border: 1px solid rgba(255, 99, 88, 0.22);
+  border-radius: 17px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 99, 88, 0.1), transparent 42%),
+    rgba(35, 18, 18, 0.36);
+}
+
+.daily-pond.is-complete .daily-pond-attention {
+  border-color: rgba(168, 233, 132, 0.2);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(168, 233, 132, 0.1), transparent 42%),
+    rgba(16, 35, 22, 0.34);
+}
+
+.daily-pond-attention span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 999px;
+  color: #061419;
+  background: #ff6b5f;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.daily-pond.is-complete .daily-pond-attention span {
+  background: #a8e984;
+}
+
+.daily-pond-attention p {
+  margin: 0;
+  color: #ffd4cf;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.daily-pond.is-complete .daily-pond-attention p {
+  color: #dfffd5;
+}
+
 .daily-pond-notice {
   margin: 14px 0 0;
   border: 1px solid rgba(146, 223, 241, 0.14);
@@ -312,6 +461,40 @@
   .daily-pond-actions {
     grid-template-columns: 1.4fr 1fr 1fr 1fr;
   }
+
+  .daily-pond-mark-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.82fr);
+  }
+}
+
+@media (max-width: 430px) {
+  .daily-pond {
+    border-radius: 26px;
+    padding: 16px;
+  }
+
+  .daily-pond-card {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .daily-pond-symbol {
+    margin-inline: auto;
+  }
+
+  .daily-pond-status-strip {
+    gap: 5px;
+  }
+
+  .daily-pond-status-strip span {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .daily-pond-status-strip i {
+    width: 7px;
+  }
 }
 
 @keyframes daily-pond-stars {
@@ -321,5 +504,18 @@
 
   to {
     transform: translate3d(-46px, -52px, 0);
+  }
+}
+
+@keyframes daily-pond-pulse {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.28;
+  }
+
+  50% {
+    transform: scale(1.06);
+    opacity: 0.54;
   }
 }
