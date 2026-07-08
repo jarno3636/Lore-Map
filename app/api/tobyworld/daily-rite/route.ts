@@ -218,25 +218,58 @@ export async function POST(request: Request) {
     const profile = await getProfile(auth.fid);
 
     if (profile?.last_completed_on === today) {
-      const shareText = buildShareText({
-        rite,
-        streak: profile.streak_count,
-        mark: profile.current_mark,
-      });
+  const displayName = clientProfile.displayName ?? profile.display_name ?? null;
+  const username = clientProfile.username ?? profile.username ?? null;
+  const pfpUrl = clientProfile.pfpUrl ?? profile.pfp_url ?? null;
 
-      return json({
-        fid: auth.fid,
-        today,
-        rite,
-        completedToday: true,
-        streak: profile.streak_count,
-        bestStreak: profile.best_streak,
-        totalCompletions: profile.total_completions,
-        mark: profile.current_mark,
-        shareText,
-      });
+  if (displayName || username || pfpUrl) {
+    const { error: updateProfileError } = await supabase
+      .from('tobyworld_daily_rites')
+      .update({
+        username,
+        display_name: displayName,
+        pfp_url: pfpUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('fid', auth.fid);
+
+    if (updateProfileError) {
+      throw new Error(`Supabase profile refresh failed: ${updateProfileError.message}`);
     }
 
+    const { error: updateEventError } = await supabase
+      .from('tobyworld_rite_events')
+      .update({
+        username,
+        display_name: displayName,
+        pfp_url: pfpUrl,
+      })
+      .eq('fid', auth.fid)
+      .eq('rite_date', today);
+
+    if (updateEventError) {
+      throw new Error(`Supabase event profile refresh failed: ${updateEventError.message}`);
+    }
+  }
+
+  const shareText = buildShareText({
+    rite,
+    streak: profile.streak_count,
+    mark: profile.current_mark,
+  });
+
+  return json({
+    fid: auth.fid,
+    today,
+    rite,
+    completedToday: true,
+    streak: profile.streak_count,
+    bestStreak: profile.best_streak,
+    totalCompletions: profile.total_completions,
+    mark: profile.current_mark,
+    shareText,
+  });
+}
     const previousStreak = profile?.streak_count ?? 0;
     const previousTotal = profile?.total_completions ?? 0;
     const nextStreak = profile?.last_completed_on === yesterday ? previousStreak + 1 : 1;
