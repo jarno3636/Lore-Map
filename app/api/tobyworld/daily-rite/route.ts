@@ -11,6 +11,15 @@ type DailyRiteRow = {
   total_completions: number;
   last_completed_on: string | null;
   current_mark: string;
+  username?: string | null;
+  display_name?: string | null;
+  pfp_url?: string | null;
+};
+
+type ClientProfile = {
+  username?: string | null;
+  displayName?: string | null;
+  pfpUrl?: string | null;
 };
 
 const DAILY_RITES = [
@@ -63,6 +72,30 @@ function json(data: unknown, status = 200) {
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return 'Unknown server error.';
+}
+
+function cleanText(value: unknown, maxLength: number) {
+  if (typeof value !== 'string') return null;
+
+  const cleaned = value.trim();
+
+  if (!cleaned) return null;
+
+  return cleaned.slice(0, maxLength);
+}
+
+async function readClientProfile(request: Request): Promise<ClientProfile> {
+  try {
+    const body = (await request.json()) as { profile?: ClientProfile };
+
+    return {
+      username: cleanText(body.profile?.username, 40),
+      displayName: cleanText(body.profile?.displayName, 80),
+      pfpUrl: cleanText(body.profile?.pfpUrl, 500),
+    };
+  } catch {
+    return {};
+  }
 }
 
 function getTodayUtc() {
@@ -158,23 +191,12 @@ export async function GET(request: Request) {
       bestStreak: profile?.best_streak ?? 0,
       totalCompletions: total,
       mark,
-      shareText: completedToday
-        ? buildShareText({
-            rite,
-            streak,
-            mark,
-          })
-        : null,
+      shareText: completedToday ? buildShareText({ rite, streak, mark }) : null,
     });
   } catch (error) {
     console.error('Daily rite GET failed:', error);
 
-    return json(
-      {
-        error: getErrorMessage(error),
-      },
-      500,
-    );
+    return json({ error: getErrorMessage(error) }, 500);
   }
 }
 
@@ -186,6 +208,7 @@ export async function POST(request: Request) {
       return json({ error: auth.error }, auth.status);
     }
 
+    const clientProfile = await readClientProfile(request);
     const supabase = getSupabaseAdmin();
 
     const today = getTodayUtc();
@@ -227,12 +250,21 @@ export async function POST(request: Request) {
       mark: nextMark,
     });
 
+    const displayName = clientProfile.displayName ?? profile?.display_name ?? null;
+    const username = clientProfile.username ?? profile?.username ?? null;
+    const pfpUrl = clientProfile.pfpUrl ?? profile?.pfp_url ?? null;
+
     const { error: eventError } = await supabase.from('tobyworld_rite_events').insert({
       fid: auth.fid,
       rite_date: today,
       rite_key: rite.key,
       mark: nextMark,
       share_text: shareText,
+      username,
+      display_name: displayName,
+      pfp_url: pfpUrl,
+      streak_count: nextStreak,
+      total_completions: nextTotal,
     });
 
     if (eventError && eventError.code !== '23505') {
@@ -247,6 +279,9 @@ export async function POST(request: Request) {
         total_completions: nextTotal,
         last_completed_on: today,
         current_mark: nextMark,
+        username,
+        display_name: displayName,
+        pfp_url: pfpUrl,
         updated_at: new Date().toISOString(),
       },
       {
@@ -272,11 +307,6 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Daily rite POST failed:', error);
 
-    return json(
-      {
-        error: getErrorMessage(error),
-      },
-      500,
-    );
+    return json({ error: getErrorMessage(error) }, 500);
   }
 }
