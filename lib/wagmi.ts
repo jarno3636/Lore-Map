@@ -1,28 +1,36 @@
-import { base } from 'wagmi/chains';
+'use client';
+
 import { createConfig, createStorage, cookieStorage, http } from 'wagmi';
-import { injected } from 'wagmi/connectors';
-import { baseAccount } from '@base-org/account';
+import { base } from 'wagmi/chains';
+import { baseAccount, injected } from 'wagmi/connectors';
 import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector';
 
-/**
- * One config supports three places:
- * 1. Farcaster Mini App host: the Farcaster connector auto-attaches the host wallet.
- * 2. Base App / browser: Base Account is the preferred wallet path.
- * 3. Other browsers: injected wallets remain available as a fallback.
- */
+const appName = 'Tobyworld Atlas';
+const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+const appIconUrl = `${appUrl}/miniapp/tobyworld-app-icon.png`;
+
 export const wagmiConfig = createConfig({
   chains: [base],
+  ssr: true,
+  storage: createStorage({
+    storage: cookieStorage,
+  }),
   connectors: [
     farcasterMiniApp(),
-    baseAccount({ appName: 'Tobyworld Atlas' }),
-    injected(),
+    baseAccount({
+      appName,
+      appLogoUrl: appIconUrl,
+    }),
+    injected({
+      shimDisconnect: true,
+    }),
   ],
-  storage: createStorage({ storage: cookieStorage }),
-  ssr: true,
   transports: {
-    [base.id]: http(process.env.NEXT_PUBLIC_BASE_RPC_URL ?? 'https://mainnet.base.org'),
+    [base.id]: http(),
   },
 });
+
+export const config = wagmiConfig;
 
 declare module 'wagmi' {
   interface Register {
