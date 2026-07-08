@@ -25,6 +25,17 @@ type DailyProfileRow = {
   pfp_url: string | null;
 };
 
+type NeynarUser = {
+  fid: number;
+  username?: string | null;
+  display_name?: string | null;
+  pfp_url?: string | null;
+};
+
+type NeynarBulkResponse = {
+  users?: NeynarUser[];
+};
+
 const RITE_DETAILS: Record<string, { icon: string; title: string }> = {
   'still-water': {
     icon: '△',
@@ -66,13 +77,55 @@ function getErrorMessage(error: unknown) {
   return 'Unknown server error.';
 }
 
-function cleanDisplayName(value: string | null | undefined) {
+function cleanText(value: string | null | undefined) {
   const cleaned = value?.trim();
 
   if (!cleaned) return null;
   if (/^fid\s+\d+$/i.test(cleaned)) return null;
 
   return cleaned;
+}
+
+async function fetchFarcasterProfilesByFid(fids: number[]) {
+  const apiKey = process.env.NEYNAR_API_KEY?.trim();
+  const profileMap = new Map<number, NeynarUser>();
+
+  if (!apiKey || fids.length === 0) {
+    return profileMap;
+  }
+
+  /*
+    Neynar accepts a comma-separated list of FIDs.
+    Docs currently cap this endpoint at 100 FIDs per request.
+  */
+  const uniqueFids = Array.from(new Set(fids)).slice(0, 100);
+
+  const url = new URL('https://api.neynar.com/v2/farcaster/user/bulk/');
+  url.searchParams.set('fids', uniqueFids.join(','));
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      'x-api-key': apiKey,
+      accept: 'application/json',
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    console.warn('Neynar profile hydration failed:', response.status, await response.text());
+    return profileMap;
+  }
+
+  const data = (await response.json()) as NeynarBulkResponse;
+
+  for (const user of data.users ?? []) {
+    if (typeof user.fid === 'number') {
+      profileMap.set(user.fid, user);
+    }
+  }
+
+  return profileMap;
 }
 
 export async function GET() {
@@ -118,22 +171,25 @@ export async function GET() {
     const rows = (recentResult.data ?? []) as ShrineEventRow[];
     const fids = Array.from(new Set(rows.map((row) => row.fid)));
 
-    const profileMap = new Map<number, DailyProfileRow>();
+    const [savedProfileResult, farcasterProfileMap] = await Promise.all([
+      fids.length > 0
+        ? supabase
+            .from('tobyworld_daily_rites')
+            .select('fid, username, display_name, pfp_url')
+            .in('fid', fids)
+        : Promise.resolve({ data: [], error: null }),
+      fetchFarcasterProfilesByFid(fids),
+    ]);
 
-    if (fids.length > 0) {
-      const { data: profiles, error: profileError } = await supabase
-        .from('tobyworld_daily_rites')
-        .select('fid, username, display_name, pfp_url')
-        .in('fid', fids);
-
-      if (profileError) {
-        throw new Error(`Shrine profile read failed: ${profileError.message}`);
-      }
-
-      ((profiles ?? []) as DailyProfileRow[]).forEach((profile) => {
-        profileMap.set(profile.fid, profile);
-      });
+    if (savedProfileResult.error) {
+      throw new Error(`Shrine profile read failed: ${savedProfileResult.error.message}`);
     }
+
+    const savedProfileMap = new Map<number, DailyProfileRow>();
+
+    ((savedProfileResult.data ?? []) as DailyProfileRow[]).forEach((profile) => {
+      savedProfileMap.set(profile.fid, profile);
+    });
 
     const events = rows.map((event) => {
       const rite = RITE_DETAILS[event.rite_key] ?? {
@@ -141,16 +197,25 @@ export async function GET() {
         title: 'Unknown Rite',
       };
 
-      const profile = profileMap.get(event.fid);
+      const savedProfile = savedProfileMap.get(event.fid);
+      const farcasterProfile = farcasterProfileMap.get(event.fid);
 
-      const username = event.username ?? profile?.username ?? null;
+      const username =
+        cleanText(farcasterProfile?.username) ??
+        cleanText(event.username) ??
+        cleanText(savedProfile?.username);
+
       const displayName =
-        cleanDisplayName(event.display_name) ??
-        cleanDisplayName(profile?.display_name) ??
+        cleanText(farcasterProfile?.display_name) ??
+        cleanText(event.display_name) ??
+        cleanText(savedProfile?.display_name) ??
         username ??
         'Pond Visitor';
 
-      const pfpUrl = event.pfp_url ?? profile?.pfp_url ?? null;
+      const pfpUrl =
+        cleanText(farcasterProfile?.pfp_url) ??
+        cleanText(event.pfp_url) ??
+        cleanText(savedProfile?.pfp_url);
 
       return {
         id: event.id,
@@ -174,6 +239,7 @@ export async function GET() {
       totalEchoes: totalResult.count ?? 0,
       todayEchoes: todayResult.count ?? 0,
       events,
+      profileHydration: process.env.NEYNAR_API_KEY ? 'neynar' : 'saved-only',
     });
   } catch (error) {
     console.error('Community shrine failed:', error);
