@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { sdk } from '@farcaster/miniapp-sdk';
 import { loreFragments, type LoreFragment } from '@/lib/lore';
 
 type NodeId = 'toby' | 'patience' | 'taboshi' | 'sato' | 'loreland' | 'gate' | 'share';
 type MapNode = Exclude<NodeId, 'share'>;
 type RitualState = 'dormant' | 'holding' | 'awakened';
+type ShareTarget = 'farcaster' | 'x' | 'message' | 'copy';
 
 type LinkItem = {
   label: string;
@@ -25,6 +27,11 @@ type NodeDetail = {
 };
 
 const HOLD_DURATION = 1700;
+const STORAGE_KEY = 'tobyworld-atlas-v5';
+const SHARE_VERSION = 'atlas-v9';
+
+const TOBYWORLD_LINE = 'Tobyworld';
+const TOBYWORLD_PATH_LINE = '$Patience <> $toby <> $Taboshi';
 
 const assets = {
   toby: {
@@ -64,7 +71,7 @@ const nodeDetails: Record<MapNode, NodeDetail> = {
     title: '$TOBY · The Pond',
     eyebrow: 'THE STILL CENTER',
     description:
-      'Toby waits in the oldest water. He does not chase the wheel. The wheel returns to him.',
+      'Toby waits in the oldest water. He does not chase the wheel. The wheel circles, listens, and returns.',
     action: 'Listen to the pond',
     howItFits:
       '$TOBY is the center-region of the Atlas. Every current can move, bloom, bend, or return — but the pond remains still.',
@@ -85,7 +92,7 @@ const nodeDetails: Record<MapNode, NodeDetail> = {
     title: '$PATIENCE · Red Grain',
     eyebrow: 'THE FIRST RIPPLE',
     description:
-      'A single red grain falls into the pond. Hold still long enough, and the water remembers.',
+      'A red grain falls. Do not rush it. Hold still long enough and the pond gives the first answer.',
     action: 'Plant stillness',
     howItFits:
       '$PATIENCE is the first rite. Nothing opens by force. The grain must rest before the next region wakes.',
@@ -105,7 +112,7 @@ const nodeDetails: Record<MapNode, NodeDetail> = {
     title: 'TABOSHI · Leaf Garden',
     eyebrow: 'THE QUIET BLOOM',
     description:
-      'Leaves gather beside the pond. The roots deepen. The flywheel starts to feel alive.',
+      'Leaves gather beside the pond. The roots deepen. The still water becomes a place that can grow.',
     action: 'Bind a leaf',
     howItFits:
       'Taboshi is the growing region. It turns still water into a garden and gives the outer wheel something to feed.',
@@ -125,7 +132,7 @@ const nodeDetails: Record<MapNode, NodeDetail> = {
     title: 'SATO · Blue Current',
     eyebrow: 'THE RETURNING FLOW',
     description:
-      'The blue current circles like koi beneath moonlight. It moves through the world and bends back to the pond.',
+      'The blue current circles like koi beneath moonlight. It moves through the world and remembers the way home.',
     action: 'Wake the current',
     howItFits:
       'Sato is the returning lane. It gives the map motion without moving the center.',
@@ -161,7 +168,7 @@ const nodeDetails: Record<MapNode, NodeDetail> = {
     title: 'Golden Gate · Rune IV',
     eyebrow: 'THE SEALED LAYER',
     description:
-      'A gold shard hums above the pond. It is seen, but not opened. An omen waiting for the next rune.',
+      'A gold shard hums above the pond. It is seen, not opened. An omen waiting for the next rune.',
     action: 'Study the gate',
     howItFits:
       'The Golden Gate is the future-facing region of the Atlas. It should feel scarce, mysterious, and unresolved.',
@@ -185,6 +192,44 @@ const stars = Array.from({ length: 54 }, (_, index) => ({
   size: `${index % 7 === 0 ? 3 : index % 3 === 0 ? 2 : 1}px`,
 }));
 
+function buildFragmentShareText(fragment: LoreFragment) {
+  const quote = fragment.quote.replace(/^["“]|["”]$/g, '');
+
+  return [
+    `“${quote}”`,
+    '',
+    TOBYWORLD_LINE,
+    TOBYWORLD_PATH_LINE,
+    '',
+    fragment.title,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildXShareText(fragment: LoreFragment) {
+  const quote = fragment.quote.replace(/^["“]|["”]$/g, '');
+  const trimmedQuote = quote.length > 145 ? `${quote.slice(0, 144).trimEnd()}…` : quote;
+
+  return [
+    `“${trimmedQuote}”`,
+    '',
+    TOBYWORLD_LINE,
+    TOBYWORLD_PATH_LINE,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function getFragmentShareUrl(fragment: LoreFragment) {
+  const url = new URL(window.location.origin);
+
+  url.searchParams.set('lore', fragment.slug);
+  url.searchParams.set('share', SHARE_VERSION);
+
+  return url.toString();
+}
+
 export function TobyworldAtlas() {
   const [selectedNode, setSelectedNode] = useState<NodeId | null>(null);
   const [ritual, setRitual] = useState<RitualState>('dormant');
@@ -194,6 +239,7 @@ export function TobyworldAtlas() {
   const [lorelandSeen, setLorelandSeen] = useState(false);
   const [toast, setToast] = useState('Touch a region. The pond will answer.');
   const [selectedFragment, setSelectedFragment] = useState<LoreFragment>(loreFragments[0]);
+  const [didLoadAtlasState, setDidLoadAtlasState] = useState(false);
 
   const frameRef = useRef<number | null>(null);
   const holdStartedAt = useRef<number | null>(null);
@@ -214,7 +260,7 @@ export function TobyworldAtlas() {
     if (ritual !== 'awakened') {
       return {
         label: 'Plant Stillness',
-        detail: 'Hold the red grain.',
+        detail: 'Hold the red grain until the ripple sleeps.',
         node: 'patience' as const,
       };
     }
@@ -222,7 +268,7 @@ export function TobyworldAtlas() {
     if (gardenLevel < 2) {
       return {
         label: 'Grow the Leaves',
-        detail: 'Bind two Taboshi leaves.',
+        detail: 'Bind two Taboshi leaves into the pond-root.',
         node: 'taboshi' as const,
       };
     }
@@ -230,7 +276,7 @@ export function TobyworldAtlas() {
     if (!riverAwake) {
       return {
         label: 'Wake the Current',
-        detail: 'Send Sato back to the pond.',
+        detail: 'Send Sato back toward Toby.',
         node: 'sato' as const,
       };
     }
@@ -238,14 +284,14 @@ export function TobyworldAtlas() {
     if (!lorelandSeen) {
       return {
         label: 'Reach the Rootbed',
-        detail: 'Loreland is ready below.',
+        detail: 'Loreland is ready below the surface.',
         node: 'loreland' as const,
       };
     }
 
     return {
-      label: 'Share the Rune',
-      detail: 'Release a fragment.',
+      label: 'Release a Fragment',
+      detail: 'Cast a piece of the pond.',
       node: 'share' as const,
     };
   }, [gardenLevel, lorelandSeen, ritual, riverAwake]);
@@ -255,8 +301,12 @@ export function TobyworldAtlas() {
   }, [ritual]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('tobyworld-atlas-v5');
-    if (!saved) return;
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+
+    if (!saved) {
+      setDidLoadAtlasState(true);
+      return;
+    }
 
     try {
       const state = JSON.parse(saved) as {
@@ -267,22 +317,34 @@ export function TobyworldAtlas() {
       };
 
       if (state.ritual) setRitual(state.ritual);
+
       if (typeof state.gardenLevel === 'number') {
         setGardenLevel(Math.max(0, Math.min(3, state.gardenLevel)));
       }
+
       if (typeof state.riverAwake === 'boolean') setRiverAwake(state.riverAwake);
       if (typeof state.lorelandSeen === 'boolean') setLorelandSeen(state.lorelandSeen);
     } catch {
-      window.localStorage.removeItem('tobyworld-atlas-v5');
+      window.localStorage.removeItem(STORAGE_KEY);
+    } finally {
+      setDidLoadAtlasState(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!didLoadAtlasState) return;
+
     window.localStorage.setItem(
-      'tobyworld-atlas-v5',
+      STORAGE_KEY,
       JSON.stringify({ ritual, gardenLevel, riverAwake, lorelandSeen }),
     );
-  }, [gardenLevel, lorelandSeen, ritual, riverAwake]);
+
+    window.dispatchEvent(
+      new CustomEvent('tobyworld:atlas-updated', {
+        detail: { ritual, gardenLevel, riverAwake, lorelandSeen },
+      }),
+    );
+  }, [didLoadAtlasState, gardenLevel, lorelandSeen, ritual, riverAwake]);
 
   useEffect(
     () => () => {
@@ -308,7 +370,7 @@ export function TobyworldAtlas() {
     setSelectedNode(node);
 
     if (node === 'share') {
-      setToast('Choose a fragment. Send it beyond the pond.');
+      setToast('Signal fire lit. Choose a fragment and send it beyond the pond.');
       return;
     }
 
@@ -321,7 +383,7 @@ export function TobyworldAtlas() {
     }
 
     if (node === 'loreland') {
-      setToast('The rootbed waits. The pond is not ready yet.');
+      setToast('The rootbed waits. Stillness, leaves, and return must come first.');
       return;
     }
 
@@ -339,7 +401,7 @@ export function TobyworldAtlas() {
     if (reset && !awakenedRef.current) {
       setRitual('dormant');
       setHoldProgress(0);
-      setToast('The grain slipped. Hold still a little longer.');
+      setToast('The grain slipped. Try again. Slower this time.');
     }
   }
 
@@ -350,7 +412,7 @@ export function TobyworldAtlas() {
     }
 
     setRitual('holding');
-    setToast('Stay still. Let the ripple sleep.');
+    setToast('Stay still. No leap. No rush. Let the ripple sleep.');
     holdStartedAt.current = performance.now();
 
     const tick = (now: number) => {
@@ -378,7 +440,7 @@ export function TobyworldAtlas() {
 
   function tendGarden() {
     if (gardenLevel >= 3) {
-      setToast('The Leaf Garden is already full of quiet light.');
+      setToast('The Leaf Garden is full of quiet light.');
       return;
     }
 
@@ -401,26 +463,70 @@ export function TobyworldAtlas() {
     }
 
     setRiverAwake(true);
-    setToast('Sato wakes. The blue current returns to Toby.');
+    setToast('Sato wakes. The blue current bends back to Toby.');
     window.navigator.vibrate?.([10, 20, 20]);
   }
 
-  async function shareFragment(fragment: LoreFragment) {
-    const url = `${window.location.origin}/lore/${fragment.slug}`;
-    const text = `${fragment.quote} — ${fragment.title} · Tobyworld`;
+  async function shareFragment(fragment: LoreFragment, target: ShareTarget) {
+    const shareUrl = getFragmentShareUrl(fragment);
+    const castText = buildFragmentShareText(fragment);
+    const xText = buildXShareText(fragment);
+    const fullText = `${castText}\n\n${shareUrl}`;
 
     try {
-      if (navigator.share) {
-        await navigator.share({ title: fragment.title, text, url });
-        setToast('The fragment left the pond.');
+      if (target === 'farcaster') {
+        const isMiniApp = await sdk.isInMiniApp().catch(() => false);
+        const capabilities = isMiniApp
+          ? ((await sdk.getCapabilities().catch(() => [])) as string[])
+          : [];
+
+        if (isMiniApp && capabilities.includes('actions.composeCast')) {
+          await sdk.actions.composeCast({
+            text: castText,
+            embeds: [shareUrl],
+          });
+
+          setToast('Farcaster composer opened. Let the fragment travel.');
+          return;
+        }
+
+        await navigator.clipboard.writeText(fullText);
+        setToast('Cast text copied. Paste it into Farcaster.');
         return;
       }
 
-      await navigator.clipboard.writeText(`${text}\n${url}`);
-      setToast('Lore copied. Cast it when ready.');
+      if (target === 'x') {
+        const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+          `${xText}\n\n${shareUrl}`,
+        )}`;
+
+        window.open(intent, '_blank', 'noopener,noreferrer');
+        setToast('X composer opened. Send the ripple.');
+        return;
+      }
+
+      if (target === 'message') {
+        if (navigator.share) {
+          await navigator.share({
+            title: fragment.title,
+            text: castText,
+            url: shareUrl,
+          });
+
+          setToast('Share sheet opened. The pond found a path.');
+          return;
+        }
+
+        await navigator.clipboard.writeText(fullText);
+        setToast('Message text copied. Send it anywhere.');
+        return;
+      }
+
+      await navigator.clipboard.writeText(fullText);
+      setToast('Fragment copied. The pond waits for your cast.');
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        setToast('The fragment waits.');
+        setToast('The fragment paused. Try again when the water settles.');
       }
     }
   }
@@ -527,7 +633,7 @@ export function TobyworldAtlas() {
         >
           <AssetImage asset="patience" className="atlas-node-image" />
           <strong>RED GRAIN</strong>
-          <small>{ritual === 'awakened' ? 'lotus awake' : 'plant stillness'}</small>
+          <small>{ritual === 'awakened' ? 'lotus awake' : 'hold still'}</small>
         </button>
 
         <button
@@ -569,7 +675,7 @@ export function TobyworldAtlas() {
         >
           <AssetImage asset="loreland" className="atlas-node-image" />
           <strong>LORELAND</strong>
-          <small>{lorelandUnlocked ? 'rootbed open' : 'beneath the roots'}</small>
+          <small>{lorelandUnlocked ? 'rootbed open' : 'beneath roots'}</small>
         </button>
 
         {gardenLevel > 0 && (
@@ -923,7 +1029,7 @@ function NodePanel({
       <button type="button" className="atlas-quote-preview" onClick={() => onShareFragment(fragment)}>
         <span>LORE FRAGMENT</span>
         <strong>{fragment.quote}</strong>
-        <small>Share fragment ↗</small>
+        <small>Open share shrine ↗</small>
       </button>
     </div>
   );
@@ -1005,19 +1111,25 @@ function ShareComposer({
 }: {
   selected: LoreFragment;
   onSelect: (fragment: LoreFragment) => void;
-  onShare: (fragment: LoreFragment) => void;
+  onShare: (fragment: LoreFragment, target: ShareTarget) => void;
 }) {
   return (
     <div className="atlas-drawer-content atlas-share-composer">
       <p className="atlas-eyebrow">SIGNAL FIRE</p>
       <h2>Release a fragment.</h2>
-      <p className="atlas-drawer-description">A small piece of the pond, ready to travel.</p>
+      <p className="atlas-drawer-description">
+        Pick a pond fragment, then cast it, post it, message it, or copy it.
+      </p>
 
       <div className={`atlas-mini-share-card accent-${selected.accent}`}>
         <span>{selected.rune}</span>
         <h3>{selected.title}</h3>
         <blockquote>{selected.quote}</blockquote>
-        <small>TOBYWORLD · THE LIVING POND</small>
+
+        <div className="atlas-mini-share-meta">
+          <small>TOBYWORLD</small>
+          <small>$Patience &lt;&gt; $toby &lt;&gt; $Taboshi</small>
+        </div>
       </div>
 
       <div className="atlas-fragment-picker">
@@ -1034,9 +1146,43 @@ function ShareComposer({
         ))}
       </div>
 
-      <button type="button" className="atlas-primary-action atlas-share-action" onClick={() => onShare(selected)}>
-        Share fragment ↗
-      </button>
+      <div className="atlas-share-actions">
+        <button
+          type="button"
+          className="atlas-primary-action atlas-share-action"
+          onClick={() => onShare(selected, 'farcaster')}
+        >
+          Cast on Farcaster ↗
+        </button>
+
+        <button
+          type="button"
+          className="atlas-share-action-secondary"
+          onClick={() => onShare(selected, 'x')}
+        >
+          Post to X ↗
+        </button>
+
+        <button
+          type="button"
+          className="atlas-share-action-secondary"
+          onClick={() => onShare(selected, 'message')}
+        >
+          Message ↗
+        </button>
+
+        <button
+          type="button"
+          className="atlas-share-action-secondary"
+          onClick={() => onShare(selected, 'copy')}
+        >
+          Copy
+        </button>
+      </div>
+
+      <p className="atlas-share-hint">
+        Shared fragments include Tobyworld and $Patience &lt;&gt; $toby &lt;&gt; $Taboshi.
+      </p>
 
       <a className="atlas-signal-link" href="https://x.com/toadgod1017" target="_blank" rel="noreferrer">
         Toadgod Signal ↗
