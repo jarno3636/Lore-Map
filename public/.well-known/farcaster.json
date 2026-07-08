@@ -1,0 +1,37 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjExMjExOTMsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHhmNTYwMzNDMTkxYjY2NTA0QWQ0Q0Y4NzMyM0E3NzNGRDg2RGM1MGFkIn0",
+    "payload": "eyJkb21haW4iOiJ0b2J5LWF0bGFzLnZlcmNlbC5hcHAifQ",
+    "signature": "2VnJFkiePx8ykg+ykaQ1/864gvDxUWitn/b5OMyMN+IVf4IGYuxrpJoErQ6tRNVPCqM5RAQ5M4u8pS0TQuB/Vhs="
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "Tobyworld Atlas",
+    "homeUrl": "https://toby-atlas.vercel.app",
+    "iconUrl": "https://toby-atlas.vercel.app/images/atlas/toby-pond-guardian.png",
+    "splashImageUrl": "https://toby-atlas.vercel.app/images/atlas/toby-pond-guardian.png",
+    "splashBackgroundColor": "#07171f",
+    "subtitle": "Read the living flywheel",
+    "description": "Explore Tobyworld lore, discover your private signal, and move through the living flywheel.",
+    "primaryCategory": "social",
+    "tags": ["tobyworld", "toby", "base", "lore", "atlas"],
+    "heroImageUrl": "https://toby-atlas.vercel.app/miniapp/tobyworld-og-image.png",
+    "tagline": "Plant stillness tend the world",
+    "ogTitle": "Tobyworld Atlas",
+    "ogDescription": "Explore the living flywheel of Tobyworld.",
+    "ogImageUrl": "https://toby-atlas.vercel.app/miniapp/tobyworld-og-image.png",
+    "noindex": false,
+    "canonicalDomain": "toby-atlas.vercel.app",
+    "requiredChains": ["eip155:8453"]
+  },
+  "frame": {
+    "version": "1",
+    "name": "Tobyworld Atlas",
+    "iconUrl": "https://toby-atlas.vercel.app/images/atlas/toby-pond-guardian.png",
+    "homeUrl": "https://toby-atlas.vercel.app",
+    "imageUrl": "https://toby-atlas.vercel.app/miniapp/tobyworld-og-image.png",
+    "buttonTitle": "Enter Tobyworld",
+    "splashImageUrl": "https://toby-atlas.vercel.app/images/atlas/toby-pond-guardian.png",
+    "splashBackgroundColor": "#07171f"
+  }
+}
