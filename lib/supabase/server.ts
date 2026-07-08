@@ -10,20 +10,36 @@ function cleanSupabaseUrl(value: string) {
     .replace(/\/rest\/v1$/, '');
 }
 
+function cleanKey(value: string) {
+  return value.trim().replace(/^['"]|['"]$/g, '');
+}
+
+function validateSupabaseServerKey(key: string) {
+  const isLegacyServiceRoleJwt = key.startsWith('eyJ');
+  const isNewSecretKey = key.startsWith('sb_secret_');
+
+  if (!isLegacyServiceRoleJwt && !isNewSecretKey) {
+    throw new Error(
+      'SUPABASE_SERVICE_ROLE_KEY must be either the legacy service_role key that starts with eyJ, or the new Supabase secret key that starts with sb_secret_. Do not use anon or sb_publishable keys here.',
+    );
+  }
+}
+
 export function getSupabaseAdmin() {
   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const rawServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const rawServerKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
 
   if (!rawSupabaseUrl) {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL.');
   }
 
-  if (!rawServiceRoleKey) {
-    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY.');
+  if (!rawServerKey) {
+    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY.');
   }
 
   const supabaseUrl = cleanSupabaseUrl(rawSupabaseUrl);
-  const serviceRoleKey = rawServiceRoleKey.trim().replace(/^['"]|['"]$/g, '');
+  const serverKey = cleanKey(rawServerKey);
 
   if (!supabaseUrl.startsWith('https://') || !supabaseUrl.includes('.supabase.co')) {
     throw new Error(
@@ -31,18 +47,10 @@ export function getSupabaseAdmin() {
     );
   }
 
-  if (supabaseUrl.includes('/rest/v1')) {
-    throw new Error(
-      'NEXT_PUBLIC_SUPABASE_URL must be the project URL only, without /rest/v1.',
-    );
-  }
-
-  if (!serviceRoleKey.startsWith('eyJ')) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY does not look like a valid Supabase JWT key.');
-  }
+  validateSupabaseServerKey(serverKey);
 
   if (!cachedClient) {
-    cachedClient = createClient(supabaseUrl, serviceRoleKey, {
+    cachedClient = createClient(supabaseUrl, serverKey, {
       auth: {
         persistSession: false,
       },
