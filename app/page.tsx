@@ -34,29 +34,6 @@ const featureCards = [
   },
 ];
 
-const loreSteps = [
-  {
-    title: 'Still water',
-    copy: 'Begin at the pond.',
-    icon: '🐸',
-  },
-  {
-    title: 'Red ripple',
-    copy: 'Patience enters.',
-    icon: '△',
-  },
-  {
-    title: 'Green bloom',
-    copy: 'The leaf awakens.',
-    icon: '🍃',
-  },
-  {
-    title: 'Blue return',
-    copy: 'The current bends back.',
-    icon: '🌀',
-  },
-];
-
 export default function Home() {
   return (
     <main className="home-shell">
@@ -154,24 +131,6 @@ export default function Home() {
         ))}
       </section>
 
-      <section className="home-lore-path" aria-label="Tobyworld ritual path">
-        <div className="home-section-heading">
-          <p className="home-kicker">THE RITUAL</p>
-          <h2>Stillness first.</h2>
-          <p>Each symbol is a place. Each place remembers.</p>
-        </div>
-
-        <div className="home-lore-steps">
-          {loreSteps.map((step) => (
-            <article className="home-lore-step" key={step.title}>
-              <span>{step.icon}</span>
-              <h3>{step.title}</h3>
-              <p>{step.copy}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <section id="atlas" className="home-section">
         <div className="home-section-heading">
           <p className="home-kicker">ATLAS</p>
@@ -203,7 +162,7 @@ export default function Home() {
             Rune III ↗
           </a>
           <a href="https://x.com/toadgod1017" target="_blank" rel="noreferrer">
-            Signal ↗
+            Toadgod X ↗
           </a>
         </div>
       </section>
