@@ -36,6 +36,10 @@ const POND_LORE_LINES = [
   'let rivers flow, not be forced.',
 ];
 
+const TOBYWORLD_LINE = 'Tobyworld';
+const TOBYWORLD_PATH_LINE = '$Patience <> $toby <> $Taboshi';
+const SHARE_CACHE_VERSION = 'v5';
+
 function hasPositiveTokenAmount(balance: unknown) {
   return typeof balance === 'bigint' && balance.toString() !== '0';
 }
@@ -107,6 +111,82 @@ function getPondRank(heldCount: number, ritualCount: number) {
   return 'Pond Visitor';
 }
 
+function cleanGeneratedShareText(value: string) {
+  return value
+    .replace(/\r\n/g, '\n')
+    .replace(/\n?https?:\/\/\S+/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => {
+      const normalized = line.toLowerCase().replace(/\s+/g, ' ');
+
+      if (!normalized) return false;
+      if (normalized === TOBYWORLD_LINE.toLowerCase()) return false;
+
+      const includesPath =
+        normalized.includes('$patience') &&
+        normalized.includes('$toby') &&
+        normalized.includes('$taboshi');
+
+      return !includesPath;
+    })
+    .join('\n')
+    .trim();
+}
+
+function trimForShare(value: string, maxLength = 760) {
+  if (value.length <= maxLength) return value;
+
+  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function buildRoleTextFromProfile(profile: TobyworldGeneratedProfile, maxLength = 760) {
+  const title = profile.title?.trim();
+  const narrative = profile.narrative?.trim();
+
+  const preferredText = [title, narrative].filter(Boolean).join('\n\n');
+
+  const fallbackText =
+    profile.castText?.trim() ||
+    profile.tweetText?.trim() ||
+    preferredText;
+
+  const cleaned = cleanGeneratedShareText(preferredText || fallbackText);
+
+  return trimForShare(cleaned || fallbackText || 'The pond remembers.', maxLength);
+}
+
+function buildCastQuote(profile: TobyworldGeneratedProfile) {
+  return [
+    buildRoleTextFromProfile(profile, 760),
+    '',
+    TOBYWORLD_LINE,
+    TOBYWORLD_PATH_LINE,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildXQuote(profile: TobyworldGeneratedProfile) {
+  return [
+    buildRoleTextFromProfile(profile, 185),
+    '',
+    TOBYWORLD_LINE,
+    TOBYWORLD_PATH_LINE,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function getShareUrl() {
+  const url = new URL(window.location.origin);
+
+  url.searchParams.set('pond', 'tobyworld');
+  url.searchParams.set('share', SHARE_CACHE_VERSION);
+
+  return url.toString();
+}
+
 export function TobyworldSignalProfile() {
   const miniApp = useMiniAppRuntime();
 
@@ -118,6 +198,8 @@ export function TobyworldSignalProfile() {
   const [source, setSource] = useState<'gemini' | 'fallback' | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [castQuote, setCastQuote] = useState<string | null>(null);
+  const [xQuote, setXQuote] = useState<string | null>(null);
 
   const autoConnectAttempted = useRef(false);
 
@@ -196,6 +278,7 @@ export function TobyworldSignalProfile() {
 
   const fallbackProfile = useMemo(() => createFallbackProfile(profileInput), [profileInput]);
   const profile = generated ?? fallbackProfile;
+  const hasRevealedRole = Boolean(castQuote);
 
   const preferredConnector = useMemo(() => {
     const match = (needle: string) =>
@@ -234,21 +317,6 @@ export function TobyworldSignalProfile() {
     void connectAsync({ connector: preferredConnector }).catch(() => undefined);
   }, [connectAsync, isConnected, miniApp.isMiniApp, preferredConnector]);
 
-  function buildShareQuote() {
-    const quote = activeLoreLine.replace(/^["“]|["”]$/g, '');
-
-    return [
-      `“${quote}”`,
-      '',
-      'Tobyworld',
-      '$Patience <> $toby <> $Taboshi',
-      '',
-      profile.title,
-    ]
-      .filter(Boolean)
-      .join('\n');
-  }
-
   async function connectWallet() {
     if (!preferredConnector) {
       setNotice('No compatible wallet was found in this browser.');
@@ -271,24 +339,17 @@ export function TobyworldSignalProfile() {
 
     setIsGenerating(true);
     setNotice(null);
+    setCastQuote(null);
+    setXQuote(null);
 
     try {
-      const init: RequestInit = {
+      const response = await fetch('/api/tobyworld/profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(profileInput),
-      };
-
-      /*
-        Use regular fetch for both webpage and Farcaster.
-
-        This endpoint does not need Farcaster Quick Auth.
-        The webpage already works with regular fetch, so Farcaster should use
-        the same path to avoid Quick Auth/domain validation issues.
-      */
-      const response = await fetch('/api/tobyworld/profile', init);
+      });
 
       let data: ProfileApiResponse | null = null;
 
@@ -302,19 +363,30 @@ export function TobyworldSignalProfile() {
         throw new Error(data.error || `Profile API failed with ${response.status}.`);
       }
 
-      setGenerated(data.profile);
+      const nextProfile = data.profile;
+      const nextCastQuote = buildCastQuote(nextProfile);
+      const nextXQuote = buildXQuote(nextProfile);
+
+      setGenerated(nextProfile);
       setSource(data.source);
+      setCastQuote(nextCastQuote);
+      setXQuote(nextXQuote);
 
       setNotice(
         data.source === 'gemini'
-          ? 'The pond answered. Your shared quote does not include token amounts.'
+          ? 'The pond answered. Your generated quote is ready to cast.'
           : 'The lore engine rested, so the pond shaped a fallback role from your path.',
       );
     } catch (error) {
       console.error('Tobyworld profile generation failed:', error);
 
+      const nextCastQuote = buildCastQuote(fallbackProfile);
+      const nextXQuote = buildXQuote(fallbackProfile);
+
       setGenerated(fallbackProfile);
       setSource('fallback');
+      setCastQuote(nextCastQuote);
+      setXQuote(nextXQuote);
 
       setNotice(
         error instanceof Error
@@ -327,18 +399,27 @@ export function TobyworldSignalProfile() {
   }
 
   async function shareToFarcaster() {
-    const appUrl = `${window.location.origin}/?pond=tobyworld`;
-    const castText = buildShareQuote();
-    const shareText = `${castText}\n\n${appUrl}`;
+    if (!castQuote) {
+      setNotice('Reveal your pond role first so the cast uses your generated quote.');
+      return;
+    }
+
+    const appUrl = getShareUrl();
+    const shareText = `${castQuote}\n\n${appUrl}`;
 
     try {
       if (miniApp.isMiniApp && miniApp.supportsComposeCast) {
-        await sdk.actions.composeCast({
-          text: castText,
+        const result = await sdk.actions.composeCast({
+          text: castQuote,
           embeds: [appUrl],
         });
 
-        setNotice('Cast composer opened. You can edit before posting.');
+        if (result?.cast) {
+          setNotice('Cast posted with your generated quote.');
+        } else {
+          setNotice('Cast composer opened. You can edit before posting.');
+        }
+
         return;
       }
 
@@ -349,22 +430,37 @@ export function TobyworldSignalProfile() {
           url: appUrl,
         });
 
-        setNotice('Share sheet opened.');
+        setNotice('Share sheet opened with your generated quote.');
         return;
       }
 
       await navigator.clipboard.writeText(shareText);
-      setNotice('Cast-ready text copied. It does not include token amounts.');
+      setNotice('Generated cast text copied. It does not include token amounts.');
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        setNotice('Sharing paused. Your pond role is still ready.');
+        setNotice('Sharing paused. Your generated quote is still ready.');
       }
     }
   }
 
+  async function copyQuote() {
+    if (!castQuote) {
+      setNotice('Reveal your pond role first, then copy the generated quote.');
+      return;
+    }
+
+    await navigator.clipboard.writeText(`${castQuote}\n\n${getShareUrl()}`);
+    setNotice('Generated quote copied.');
+  }
+
   function shareToX() {
-    const appUrl = `${window.location.origin}/?pond=tobyworld`;
-    const text = `${buildShareQuote()}\n\n${appUrl}`;
+    if (!xQuote) {
+      setNotice('Reveal your pond role first so the post uses your generated quote.');
+      return;
+    }
+
+    const appUrl = getShareUrl();
+    const text = `${xQuote}\n\n${appUrl}`;
     const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
 
     window.open(intent, '_blank', 'noopener,noreferrer');
@@ -384,7 +480,14 @@ export function TobyworldSignalProfile() {
     return assetAmounts[assetId];
   }
 
-  const shareQuote = buildShareQuote();
+  const castPreview =
+    castQuote ??
+    [
+      'Reveal your pond role to prepare a generated cast.',
+      '',
+      TOBYWORLD_LINE,
+      TOBYWORLD_PATH_LINE,
+    ].join('\n');
 
   return (
     <section className="signal-profile pond-profile" aria-label="Your Tobyworld pond role">
@@ -542,7 +645,9 @@ export function TobyworldSignalProfile() {
 
         {source && (
           <small className="signal-source-note">
-            {source === 'gemini' ? 'Lore shaped by Gemini from your private pond path.' : 'Atlas fallback role.'}
+            {source === 'gemini'
+              ? 'Lore shaped by Gemini from your private pond path.'
+              : 'Atlas fallback role.'}
           </small>
         )}
       </article>
@@ -550,10 +655,10 @@ export function TobyworldSignalProfile() {
       <article className="pond-cast-preview" aria-label="Cast preview">
         <div>
           <p className="signal-kicker">CAST PREVIEW</p>
-          <h3>The quote the pond will send</h3>
+          <h3>{castQuote ? 'The generated quote the pond will send' : 'Reveal first, then cast'}</h3>
         </div>
 
-        <pre>{shareQuote}</pre>
+        <pre>{castPreview}</pre>
       </article>
 
       <div className="signal-actions pond-actions">
@@ -566,11 +671,30 @@ export function TobyworldSignalProfile() {
           {isGenerating ? 'Reading the pond…' : 'Reveal my pond role ✦'}
         </button>
 
-        <button type="button" className="signal-share-button" onClick={shareToFarcaster}>
+        <button
+          type="button"
+          className="signal-share-button"
+          onClick={shareToFarcaster}
+          disabled={!castQuote}
+        >
           Cast Quote
         </button>
 
-        <button type="button" className="signal-share-button" onClick={shareToX}>
+        <button
+          type="button"
+          className="signal-share-button"
+          onClick={copyQuote}
+          disabled={!castQuote}
+        >
+          Copy Quote
+        </button>
+
+        <button
+          type="button"
+          className="signal-share-button"
+          onClick={shareToX}
+          disabled={!xQuote}
+        >
           Post Quote
         </button>
       </div>
