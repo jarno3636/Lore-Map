@@ -58,7 +58,19 @@ type RuntimeProfileFields = {
   } | null;
 };
 
-const SHARE_VERSION = 'daily-v2';
+const SHARE_VERSION = 'daily-v3';
+
+function getOrigin() {
+  if (typeof window === 'undefined') {
+    return 'https://toby-atlas.vercel.app';
+  }
+
+  return window.location.origin;
+}
+
+function getApiUrl(path: string) {
+  return `${getOrigin()}${path}`;
+}
 
 function getBoundQuickAuthFetch() {
   const quickAuth = (sdk as QuickAuthSdk).quickAuth;
@@ -67,20 +79,16 @@ function getBoundQuickAuthFetch() {
     return null;
   }
 
-  /*
-    Do not destructure sdk.quickAuth.fetch directly.
-    In Farcaster mobile it needs its internal `this` binding.
-  */
   return quickAuth.fetch.bind(quickAuth);
 }
 
 function getShareUrl() {
-  const url = new URL(window.location.origin);
+  const params = new URLSearchParams({
+    daily: 'pond-rite',
+    share: SHARE_VERSION,
+  });
 
-  url.searchParams.set('daily', 'pond-rite');
-  url.searchParams.set('share', SHARE_VERSION);
-
-  return url.toString();
+  return `${getOrigin()}/?${params.toString()}`;
 }
 
 function getPlaceholderRite(): DailyRite {
@@ -129,6 +137,25 @@ function getRiteSymbolClass(rite: DailyRite) {
   return '';
 }
 
+async function readJsonResponse(response: Response) {
+  try {
+    return (await response.json()) as DailyRiteResponse;
+  } catch {
+    return {
+      fid: 0,
+      today: 'Today',
+      rite: getPlaceholderRite(),
+      completedToday: false,
+      streak: 0,
+      bestStreak: 0,
+      totalCompletions: 0,
+      mark: 'Pond Visitor',
+      shareText: null,
+      error: `The pond returned ${response.status} without valid JSON.`,
+    } satisfies DailyRiteResponse;
+  }
+}
+
 export function DailyPondRite() {
   const miniApp = useMiniAppRuntime();
 
@@ -162,7 +189,7 @@ export function DailyPondRite() {
     }
 
     if (!data) {
-      return 'Tap refresh or complete the rite to wake today’s pond record.';
+      return 'Tap the rite button to wake today’s pond record.';
     }
 
     if (data.completedToday) {
@@ -184,8 +211,8 @@ export function DailyPondRite() {
     setNotice(null);
 
     try {
-      const response = await authFetch('/api/tobyworld/daily-rite');
-      const nextData = (await response.json()) as DailyRiteResponse;
+      const response = await authFetch(getApiUrl('/api/tobyworld/daily-rite'));
+      const nextData = await readJsonResponse(response);
 
       if (!response.ok) {
         throw new Error(nextData.error || 'Unable to read today’s rite.');
@@ -219,11 +246,11 @@ export function DailyPondRite() {
     setNotice(null);
 
     try {
-      const response = await authFetch('/api/tobyworld/daily-rite', {
+      const response = await authFetch(getApiUrl('/api/tobyworld/daily-rite'), {
         method: 'POST',
       });
 
-      const nextData = (await response.json()) as DailyRiteResponse;
+      const nextData = await readJsonResponse(response);
 
       if (!response.ok) {
         throw new Error(nextData.error || 'Unable to complete today’s rite.');
@@ -306,7 +333,13 @@ export function DailyPondRite() {
 
           <div>
             <strong>{profile.displayName}</strong>
-            <small>{profile.handle ? `@${profile.handle}` : canPersist ? 'FID saved' : 'Farcaster needed'}</small>
+            <small>
+              {profile.handle
+                ? `@${profile.handle}`
+                : canPersist
+                  ? 'FID saved'
+                  : 'Farcaster needed'}
+            </small>
           </div>
         </div>
       </header>
