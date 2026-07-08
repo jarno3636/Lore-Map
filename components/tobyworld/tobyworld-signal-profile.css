@@ -1,136 +1,321 @@
+/* -------------------------------------------------------------------------- */
+/* Tobyworld Pond Role / Wallet Inventory UI                                  */
+/* -------------------------------------------------------------------------- */
+
 .signal-profile {
-  --signal-ink: #eefbff;
-  --signal-muted: #a9cbd2;
-  --signal-blue: #6fd0ff;
-  --signal-red: #ff8a78;
-  --signal-green: #b8ec85;
-  --signal-gold: #f6cf78;
   position: relative;
-  width: min(100%, 620px);
+  width: min(100%, 920px);
+  margin-inline: auto;
   overflow: hidden;
-  margin: 26px auto;
-  border: 1px solid rgba(151, 231, 248, 0.22);
-  border-radius: 28px;
-  padding: 20px;
-  color: var(--signal-ink);
+  border: 1px solid rgba(146, 223, 241, 0.22);
+  border-radius: 32px;
+  padding: clamp(18px, 4vw, 28px);
+  color: #f5f0df;
   background:
-    radial-gradient(circle at 85% 8%, rgba(91, 201, 231, 0.17), transparent 28%),
-    linear-gradient(150deg, rgba(12, 47, 59, 0.96), rgba(4, 19, 26, 0.98));
-  box-shadow: inset 0 0 60px rgba(75, 209, 238, 0.06), 0 18px 45px rgba(0, 0, 0, 0.25);
+    radial-gradient(circle at 50% 0%, rgba(103, 213, 246, 0.16), transparent 34%),
+    radial-gradient(circle at 88% 22%, rgba(249, 201, 104, 0.1), transparent 28%),
+    radial-gradient(circle at 10% 80%, rgba(168, 228, 125, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(10, 48, 60, 0.96), rgba(4, 17, 23, 0.98));
+  box-shadow:
+    inset 0 0 54px rgba(180, 242, 255, 0.05),
+    0 24px 80px rgba(0, 0, 0, 0.34);
+  isolation: isolate;
 }
 
+.signal-profile,
 .signal-profile * {
   box-sizing: border-box;
 }
 
-.signal-profile-glow {
+.signal-profile::before {
   position: absolute;
-  top: -110px;
-  right: -85px;
-  width: 250px;
-  height: 250px;
-  border-radius: 50%;
-  opacity: 0.55;
-  background: radial-gradient(circle, rgba(105, 223, 252, 0.26), transparent 68%);
-  filter: blur(12px);
+  inset: 0;
+  z-index: 0;
+  content: '';
   pointer-events: none;
+  opacity: 0.28;
+  background-image:
+    radial-gradient(circle, rgba(236, 255, 255, 0.9) 0 1px, transparent 1.8px),
+    radial-gradient(circle, rgba(151, 230, 248, 0.45) 0 1px, transparent 1.7px);
+  background-position:
+    12px 24px,
+    78px 110px;
+  background-size:
+    96px 132px,
+    142px 168px;
+  animation: pond-stars 22s linear infinite;
 }
 
-.signal-profile-header,
-.signal-wallet-row,
-.signal-activity-panel,
-.signal-actions {
+.signal-profile > * {
   position: relative;
   z-index: 1;
 }
 
-.signal-profile-header {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  justify-content: space-between;
+.signal-profile-glow {
+  position: absolute;
+  z-index: 0;
+  top: -120px;
+  left: 50%;
+  width: 420px;
+  height: 420px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(85, 214, 250, 0.2), transparent 68%);
+  filter: blur(10px);
+  pointer-events: none;
 }
 
-.signal-kicker,
-.signal-wallet-label {
-  display: block;
+.pond-orbit {
+  position: absolute;
+  z-index: 0;
+  border: 1px solid rgba(150, 230, 248, 0.12);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.pond-orbit::before {
+  position: absolute;
+  top: 16%;
+  left: 16%;
+  width: 10px;
+  height: 10px;
+  content: '';
+  border-radius: 999px;
+  background: rgba(151, 232, 248, 0.65);
+  box-shadow: 0 0 18px rgba(151, 232, 248, 0.8);
+}
+
+.pond-orbit-one {
+  top: 110px;
+  right: -90px;
+  width: 260px;
+  height: 260px;
+  animation: pond-orbit-spin 16s linear infinite;
+}
+
+.pond-orbit-two {
+  bottom: 140px;
+  left: -120px;
+  width: 310px;
+  height: 310px;
+  animation: pond-orbit-spin 22s linear infinite reverse;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Header                                                                     */
+/* -------------------------------------------------------------------------- */
+
+.signal-profile-header {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.signal-kicker {
   margin: 0;
-  color: #8bd3e3;
+  color: #9bdded;
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .signal-profile-header h2 {
-  max-width: 420px;
-  margin: 7px 0 10px;
+  max-width: 680px;
+  margin: 9px 0 10px;
   font-family: Georgia, serif;
-  font-size: clamp(28px, 7vw, 38px);
-  line-height: 0.98;
-  letter-spacing: -0.04em;
+  font-size: clamp(34px, 9vw, 62px);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
 }
 
 .signal-profile-header p:last-child {
-  max-width: 455px;
+  max-width: 650px;
   margin: 0;
-  color: var(--signal-muted);
-  font-size: 14px;
+  color: #bdd5db;
+  font-size: 15px;
   line-height: 1.55;
 }
 
 .signal-host-pill {
   display: inline-flex;
-  flex: 0 0 auto;
-  gap: 6px;
   align-items: center;
-  border: 1px solid rgba(154, 227, 243, 0.22);
+  justify-content: center;
+  width: max-content;
+  max-width: 100%;
+  gap: 8px;
+  border: 1px solid rgba(151, 232, 248, 0.18);
   border-radius: 999px;
-  padding: 8px 10px;
-  color: #b4d7dd;
-  background: rgba(7, 32, 41, 0.76);
-  font-size: 10px;
-  font-weight: 800;
+  padding: 10px 12px;
+  color: #b9e9f3;
+  background: rgba(4, 21, 28, 0.68);
+  font-size: 12px;
+  font-weight: 900;
   white-space: nowrap;
 }
 
-.signal-host-pill.is-miniapp {
-  border-color: rgba(157, 229, 249, 0.47);
-  color: #d6faff;
-}
-
 .signal-host-pill span {
-  color: #79ddf5;
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 999px;
+  color: #b9f2ff;
+  background: rgba(36, 106, 127, 0.58);
+  box-shadow: 0 0 18px rgba(90, 184, 255, 0.22);
 }
 
-.signal-wallet-row {
-  display: flex;
+.signal-host-pill.is-miniapp {
+  color: #fff3c7;
+  border-color: rgba(249, 201, 104, 0.3);
+  background: rgba(73, 55, 25, 0.44);
+}
+
+.signal-host-pill.is-miniapp span {
+  color: #fff7cc;
+  background: rgba(161, 118, 31, 0.62);
+  box-shadow: 0 0 18px rgba(249, 201, 104, 0.28);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pond rank hero                                                             */
+/* -------------------------------------------------------------------------- */
+
+.pond-hero-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
   gap: 14px;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 20px;
-  border: 1px solid rgba(145, 221, 240, 0.16);
-  border-radius: 18px;
-  padding: 13px;
-  background: rgba(6, 27, 35, 0.68);
+  margin-top: 22px;
+  padding: 15px;
+  border: 1px solid rgba(162, 233, 248, 0.22);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 12% 20%, rgba(111, 213, 250, 0.19), transparent 32%),
+    radial-gradient(circle at 90% 0%, rgba(249, 201, 104, 0.1), transparent 35%),
+    rgba(5, 26, 34, 0.72);
+  box-shadow:
+    inset 0 0 36px rgba(183, 245, 255, 0.05),
+    0 18px 44px rgba(0, 0, 0, 0.22);
 }
 
-.signal-wallet-row strong,
-.signal-wallet-row small {
+.pond-hero-frog {
+  display: grid;
+  width: 82px;
+  height: 82px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(208, 248, 255, 0.36);
+  border-radius: 26px;
+  background: radial-gradient(circle at 50% 35%, rgba(125, 221, 255, 0.35), rgba(6, 32, 43, 0.92));
+  box-shadow: 0 0 34px rgba(86, 205, 247, 0.24);
+}
+
+.pond-hero-frog img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pond-hero-copy {
+  min-width: 0;
+}
+
+.pond-hero-copy span,
+.pond-section-title span,
+.pond-amount-pill span {
   display: block;
+  color: #93d8e6;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.pond-hero-copy strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff8e6;
+  font-family: Georgia, serif;
+  font-size: clamp(26px, 7vw, 42px);
+  line-height: 0.95;
+  overflow-wrap: anywhere;
+}
+
+.pond-hero-copy p {
+  margin: 8px 0 0;
+  color: #c3dee2;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.pond-score {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: 6px 8px;
+  align-items: baseline;
+  border-top: 1px solid rgba(157, 230, 247, 0.14);
+  padding-top: 12px;
+}
+
+.pond-score b {
+  color: #e8fbff;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.pond-score small {
+  color: #96b9c1;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Wallet row                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.signal-wallet-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: center;
+  margin-top: 16px;
+  border: 1px solid rgba(146, 223, 241, 0.2);
+  border-radius: 22px;
+  padding: 14px;
+  background: rgba(4, 21, 28, 0.72);
+}
+
+.signal-wallet-row > div {
+  min-width: 0;
+}
+
+.signal-wallet-label {
+  display: block;
+  margin-bottom: 5px;
+  color: #8ecedd;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
 }
 
 .signal-wallet-row strong {
-  margin-top: 4px;
-  font-size: 15px;
-  letter-spacing: 0.05em;
+  display: block;
+  color: #ecfbff;
+  font-size: 16px;
+  overflow-wrap: anywhere;
 }
 
 .signal-wallet-row small {
-  max-width: 330px;
-  margin-top: 4px;
-  color: #90b6be;
-  font-size: 11px;
-  line-height: 1.35;
+  display: block;
+  margin-top: 5px;
+  color: #95b8c1;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .signal-connect-button,
@@ -139,367 +324,541 @@
 .signal-refresh {
   border: 0;
   cursor: pointer;
-  font: inherit;
+  font-weight: 900;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
 }
 
-.signal-connect-button {
-  flex: 0 0 auto;
-  border-radius: 13px;
-  padding: 11px 13px;
-  color: #021116;
-  background: linear-gradient(135deg, #bdf4ff, #65bee0);
-  font-size: 12px;
-  font-weight: 900;
+.signal-connect-button:hover,
+.signal-generate-button:hover,
+.signal-share-button:hover,
+.signal-refresh:hover {
+  transform: translateY(-1px);
 }
 
 .signal-connect-button:disabled,
 .signal-generate-button:disabled {
   cursor: default;
-  opacity: 0.56;
+  opacity: 0.58;
+  transform: none;
+}
+
+.signal-connect-button {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 999px;
+  padding: 0 18px;
+  color: #061116;
+  background: linear-gradient(135deg, #d1f8ff, #67cfff);
+  box-shadow: 0 14px 34px rgba(78, 201, 241, 0.2);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pond inventory                                                             */
+/* -------------------------------------------------------------------------- */
+
+.pond-section-title {
+  margin-top: 24px;
+}
+
+.pond-section-title h3 {
+  margin: 6px 0 6px;
+  font-family: Georgia, serif;
+  font-size: clamp(29px, 8vw, 42px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.pond-section-title span {
+  color: #a7cbd2;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .signal-asset-grid {
-  position: relative;
-  z-index: 1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
+  grid-template-columns: 1fr;
+  gap: 13px;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 13px;
 }
 
 .signal-asset-card {
-  position: relative;
+  display: grid;
+  gap: 13px;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid rgba(155, 225, 240, 0.16);
-  border-radius: 18px;
-  padding: 10px;
-  background: rgba(7, 32, 41, 0.72);
+  border: 1px solid rgba(151, 232, 248, 0.18);
+  border-radius: 22px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(108, 207, 244, 0.14), transparent 30%),
+    rgba(5, 24, 31, 0.74);
 }
 
-.signal-asset-card::before {
-  position: absolute;
-  top: -45%;
-  left: 20%;
-  width: 90px;
-  height: 90px;
-  content: '';
-  border-radius: 50%;
-  filter: blur(16px);
-  opacity: 0.24;
+.signal-asset-card.accent-red,
+.pond-asset-card.accent-red {
+  border-color: rgba(255, 117, 103, 0.24);
+  background:
+    radial-gradient(circle at 90% 0%, rgba(255, 117, 103, 0.16), transparent 30%),
+    rgba(5, 24, 31, 0.74);
 }
 
-.signal-asset-card.accent-blue::before { background: var(--signal-blue); }
-.signal-asset-card.accent-red::before { background: var(--signal-red); }
-.signal-asset-card.accent-green::before { background: var(--signal-green); }
+.signal-asset-card.accent-green,
+.pond-asset-card.accent-green {
+  border-color: rgba(168, 228, 125, 0.24);
+  background:
+    radial-gradient(circle at 90% 0%, rgba(168, 228, 125, 0.16), transparent 30%),
+    rgba(5, 24, 31, 0.74);
+}
 
-.signal-asset-card > img {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 7px;
-  border-radius: 19px;
+.signal-asset-card.accent-blue,
+.pond-asset-card.accent-blue {
+  border-color: rgba(100, 204, 255, 0.26);
+}
+
+.signal-asset-card.accent-gold,
+.pond-asset-card.accent-gold {
+  border-color: rgba(249, 201, 104, 0.28);
+  background:
+    radial-gradient(circle at 90% 0%, rgba(249, 201, 104, 0.15), transparent 30%),
+    rgba(5, 24, 31, 0.74);
+}
+
+.pond-asset-topline {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.signal-asset-card img,
+.pond-asset-topline img {
+  width: 74px;
+  height: 74px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(220, 250, 255, 0.18);
+  border-radius: 22px;
   object-fit: cover;
-  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.26));
+  background: rgba(7, 31, 40, 0.72);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
 .signal-asset-copy {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-}
-
-.signal-asset-copy span,
-.signal-asset-copy strong,
-.signal-asset-copy small {
-  display: block;
+  min-width: 0;
 }
 
 .signal-asset-copy span {
-  color: #a0d7e1;
-  font-size: 9px;
+  display: block;
+  color: #8bd7e9;
+  font-size: 10px;
   font-weight: 900;
+  letter-spacing: 0.14em;
 }
 
 .signal-asset-copy strong {
-  overflow: hidden;
-  margin-top: 3px;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: block;
+  margin-top: 4px;
+  color: #f2fbff;
+  font-family: Georgia, serif;
+  font-size: 25px;
+  line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .signal-asset-copy small {
-  margin-top: 4px;
-  color: #97bac2;
-  font-size: 10px;
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 8px;
+  border: 1px solid rgba(151, 232, 248, 0.16);
+  border-radius: 999px;
+  padding: 6px 8px;
+  color: #bde5ec;
+  background: rgba(7, 31, 40, 0.66);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: lowercase;
+}
+
+.pond-amount-pill {
+  border: 1px solid rgba(249, 201, 104, 0.22);
+  border-radius: 16px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(249, 201, 104, 0.1), transparent 32%),
+    rgba(51, 40, 20, 0.42);
+}
+
+.pond-amount-pill strong {
+  display: block;
+  margin-top: 5px;
+  color: #fff3ce;
+  font-family: Georgia, serif;
+  font-size: 24px;
+  line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .signal-asset-card details {
-  position: relative;
-  z-index: 1;
-  margin-top: 9px;
-  border-top: 1px solid rgba(166, 229, 242, 0.12);
-  padding-top: 8px;
+  min-width: 0;
+  border-top: 1px solid rgba(151, 232, 248, 0.12);
+  padding-top: 10px;
 }
 
 .signal-asset-card summary {
-  color: #b8e9f2;
-  font-size: 10px;
-  font-weight: 800;
+  color: #d8f5fa;
+  font-size: 12px;
+  font-weight: 900;
   cursor: pointer;
-  list-style: none;
 }
 
-.signal-asset-card summary::-webkit-details-marker {
-  display: none;
-}
-
-.signal-asset-card summary::after {
-  float: right;
-  content: '+';
-}
-
-.signal-asset-card details[open] summary::after {
-  content: '−';
-}
-
-.signal-asset-card details p {
-  margin: 8px 0;
-  color: #a9c5ca;
-  font-size: 11px;
-  line-height: 1.4;
+.signal-asset-card p {
+  margin: 10px 0 0;
+  color: #b9d5db;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .signal-asset-links {
-  display: grid;
-  gap: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .signal-asset-links a {
-  color: #94deed;
-  font-size: 10px;
+  border: 1px solid rgba(146, 223, 241, 0.18);
+  border-radius: 999px;
+  padding: 8px 10px;
+  color: #b9edf7;
+  background: rgba(12, 49, 61, 0.58);
+  font-size: 11px;
+  font-weight: 800;
   text-decoration: none;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Atlas memory                                                               */
+/* -------------------------------------------------------------------------- */
+
 .signal-activity-panel {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  align-items: center;
-  margin-top: 14px;
-  border: 1px solid rgba(149, 225, 244, 0.14);
-  border-radius: 19px;
-  padding: 13px;
-  background: rgba(6, 29, 36, 0.62);
+  gap: 13px;
+  margin-top: 18px;
+  border: 1px solid rgba(151, 232, 248, 0.18);
+  border-radius: 24px;
+  padding: 15px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(110, 220, 250, 0.12), transparent 28%),
+    rgba(5, 24, 31, 0.74);
 }
 
 .signal-activity-panel h3 {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
+  color: #f4fbff;
   font-family: Georgia, serif;
-  font-size: 20px;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.035em;
 }
 
 .signal-refresh {
-  border: 1px solid rgba(149, 224, 242, 0.22);
-  border-radius: 10px;
-  padding: 8px 9px;
-  color: #bcebf2;
-  background: rgba(13, 59, 70, 0.62);
-  font-size: 11px;
+  justify-self: start;
+  border: 1px solid rgba(151, 232, 248, 0.18);
+  border-radius: 999px;
+  padding: 10px 12px;
+  color: #e5fbff;
+  background: rgba(12, 49, 61, 0.66);
+  font-size: 12px;
 }
 
 .signal-activity-chips {
-  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
 }
 
 .signal-activity-chip {
   display: inline-flex;
-  gap: 5px;
   align-items: center;
-  border: 1px solid rgba(152, 206, 218, 0.16);
+  gap: 7px;
+  border: 1px solid rgba(151, 232, 248, 0.16);
   border-radius: 999px;
-  padding: 7px 9px;
-  color: #7e9fa6;
-  background: rgba(4, 22, 28, 0.62);
-  font-size: 10px;
+  padding: 9px 10px;
+  color: #93b9c2;
+  background: rgba(4, 21, 28, 0.64);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .signal-activity-chip b {
-  font-size: 12px;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .signal-activity-chip.is-active {
-  color: #e4f9dd;
-  border-color: rgba(177, 237, 136, 0.35);
-  background: rgba(64, 111, 63, 0.32);
+  color: #f4fcff;
+  border-color: rgba(151, 232, 248, 0.34);
+  background: linear-gradient(135deg, rgba(25, 91, 108, 0.84), rgba(12, 49, 61, 0.72));
+  box-shadow: 0 0 24px rgba(90, 184, 255, 0.14);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Generated pond role                                                        */
+/* -------------------------------------------------------------------------- */
 
 .signal-profile-result {
   position: relative;
-  z-index: 1;
   overflow: hidden;
-  margin-top: 14px;
-  border: 1px solid rgba(151, 228, 246, 0.26);
-  border-radius: 21px;
-  padding: 18px 18px 16px;
-  background: linear-gradient(145deg, rgba(24, 73, 86, 0.86), rgba(7, 28, 36, 0.96));
+  margin-top: 18px;
+  border: 1px solid rgba(151, 232, 248, 0.22);
+  border-radius: 24px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 85% 8%, rgba(249, 201, 104, 0.18), transparent 30%),
+    linear-gradient(145deg, rgba(17, 59, 74, 0.92), rgba(7, 27, 36, 0.98));
+  box-shadow:
+    inset 0 0 40px rgba(180, 242, 255, 0.04),
+    0 18px 44px rgba(0, 0, 0, 0.22);
 }
 
-.signal-profile-result::after {
-  position: absolute;
-  top: -60px;
-  right: -40px;
-  width: 155px;
-  height: 155px;
-  content: '';
-  border-radius: 50%;
-  opacity: 0.18;
-  filter: blur(9px);
+.signal-profile-result.accent-red {
+  border-color: rgba(255, 117, 103, 0.28);
+  background:
+    radial-gradient(circle at 85% 8%, rgba(255, 117, 103, 0.18), transparent 30%),
+    linear-gradient(145deg, rgba(70, 29, 32, 0.92), rgba(7, 27, 36, 0.98));
 }
 
-.signal-profile-result.accent-blue::after { background: var(--signal-blue); }
-.signal-profile-result.accent-red::after { background: var(--signal-red); }
-.signal-profile-result.accent-green::after { background: var(--signal-green); }
-.signal-profile-result.accent-gold::after { background: var(--signal-gold); }
+.signal-profile-result.accent-green {
+  border-color: rgba(168, 228, 125, 0.28);
+  background:
+    radial-gradient(circle at 85% 8%, rgba(168, 228, 125, 0.16), transparent 30%),
+    linear-gradient(145deg, rgba(32, 70, 47, 0.92), rgba(7, 27, 36, 0.98));
+}
+
+.signal-profile-result.accent-blue {
+  border-color: rgba(100, 204, 255, 0.3);
+}
+
+.signal-profile-result.accent-gold {
+  border-color: rgba(249, 201, 104, 0.32);
+}
 
 .signal-result-orb {
   position: absolute;
   top: 17px;
   right: 17px;
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  border: 1px solid rgba(237, 247, 255, 0.48);
-  border-radius: 50%;
-  color: #fff7cf;
-  background: radial-gradient(circle at 35% 30%, #d8f9ff, #297da2);
-  box-shadow: 0 0 25px rgba(93, 211, 241, 0.28);
+  border: 1px solid rgba(249, 201, 104, 0.3);
+  border-radius: 16px;
+  color: #fff1bd;
+  background: rgba(80, 60, 24, 0.42);
+  box-shadow: 0 0 28px rgba(249, 201, 104, 0.18);
 }
 
 .signal-profile-result h3 {
-  max-width: calc(100% - 58px);
-  margin: 7px 0 9px;
+  max-width: 720px;
+  margin: 8px 48px 10px 0;
+  color: #fff8e6;
   font-family: Georgia, serif;
-  font-size: 27px;
-  line-height: 1.02;
+  font-size: clamp(31px, 8vw, 52px);
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+  overflow-wrap: anywhere;
 }
 
 .signal-profile-result p:not(.signal-kicker) {
-  max-width: 460px;
   margin: 0;
-  color: #c7dfe2;
-  font-size: 14px;
-  line-height: 1.52;
+  color: #c7dfe3;
+  font-size: 15px;
+  line-height: 1.55;
 }
 
 .signal-source-note {
   display: block;
-  margin-top: 12px;
-  color: #8db7c1;
-  font-size: 10px;
+  margin-top: 13px;
+  color: #8fb5be;
+  font-size: 11px;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Actions                                                                    */
+/* -------------------------------------------------------------------------- */
 
 .signal-actions {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 8px;
-  margin-top: 14px;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .signal-generate-button,
 .signal-share-button {
-  border-radius: 14px;
-  padding: 13px 12px;
-  font-size: 12px;
-  font-weight: 900;
+  min-height: 48px;
+  border-radius: 999px;
+  padding: 0 17px;
+  font-size: 13px;
 }
 
 .signal-generate-button {
-  color: #07151a;
-  background: linear-gradient(135deg, #f6e6a7, #ddad49);
+  color: #061116;
+  background: linear-gradient(135deg, #ffe2a6, #f6c35f);
+  box-shadow: 0 16px 38px rgba(249, 201, 104, 0.18);
 }
 
 .signal-share-button {
-  border: 1px solid rgba(159, 231, 246, 0.24);
-  color: #d8faff;
-  background: rgba(16, 65, 78, 0.74);
+  color: #e8fbff;
+  border: 1px solid rgba(151, 232, 248, 0.22);
+  background: rgba(12, 49, 61, 0.72);
 }
 
 .signal-notice {
-  margin: 12px 2px 0;
-  color: #b9d9dc;
-  font-size: 12px;
-  line-height: 1.4;
+  margin: 14px 0 0;
+  border: 1px solid rgba(151, 232, 248, 0.18);
+  border-radius: 16px;
+  padding: 12px;
+  color: #d5f5fa;
+  background: rgba(7, 31, 40, 0.66);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .signal-privacy-note {
-  margin: 14px 2px 0;
-  color: #789ca5;
-  font-size: 10px;
+  margin: 14px 0 0;
+  border: 1px solid rgba(146, 223, 241, 0.14);
+  border-radius: 16px;
+  padding: 12px;
+  color: #90b2bb;
+  background: rgba(3, 17, 23, 0.52);
+  font-size: 11px;
   line-height: 1.5;
 }
 
 .signal-privacy-note strong {
-  color: #a4c7ce;
+  color: #d8f6fc;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Responsive                                                                 */
+/* -------------------------------------------------------------------------- */
+
+@media (min-width: 640px) {
+  .signal-profile-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .signal-wallet-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .signal-connect-button {
+    width: auto;
+  }
+
+  .signal-asset-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .signal-actions {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .signal-share-button {
+    min-width: 112px;
+  }
+}
+
+@media (min-width: 720px) {
+  .pond-hero-card {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .pond-score {
+    grid-column: auto;
+    border-top: 0;
+    border-left: 1px solid rgba(157, 230, 247, 0.14);
+    padding-top: 0;
+    padding-left: 14px;
+  }
+
+  .signal-activity-panel {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .signal-activity-chips {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 420px) {
   .signal-profile {
-    border-radius: 22px;
+    border-radius: 26px;
     padding: 16px;
   }
 
-  .signal-profile-header {
-    display: block;
+  .pond-hero-card {
+    grid-template-columns: 1fr;
   }
 
-  .signal-host-pill {
-    margin-top: 12px;
+  .pond-hero-frog {
+    width: 92px;
+    height: 92px;
   }
 
-  .signal-wallet-row {
-    align-items: flex-start;
-    flex-direction: column;
+  .pond-score {
+    grid-template-columns: auto 1fr;
   }
 
-  .signal-connect-button {
-    width: 100%;
+  .signal-profile-result h3 {
+    margin-right: 0;
   }
 
-  .signal-asset-grid {
-    gap: 7px;
+  .signal-result-orb {
+    position: static;
+    margin-bottom: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal-profile::before,
+  .pond-orbit-one,
+  .pond-orbit-two {
+    animation: none !important;
   }
 
-  .signal-asset-card {
-    border-radius: 14px;
-    padding: 8px;
+  .signal-connect-button,
+  .signal-generate-button,
+  .signal-share-button,
+  .signal-refresh {
+    transition: none !important;
   }
+}
 
-  .signal-asset-card > img {
-    width: 56px;
-    height: 56px;
+/* -------------------------------------------------------------------------- */
+/* Animations                                                                 */
+/* -------------------------------------------------------------------------- */
+
+@keyframes pond-stars {
+  to {
+    background-position:
+      12px 156px,
+      78px 278px;
   }
+}
 
-  .signal-asset-copy strong {
-    font-size: 11px;
-  }
-
-  .signal-asset-copy small {
-    font-size: 9px;
-  }
-
-  .signal-actions {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .signal-generate-button {
-    grid-column: 1 / -1;
+@keyframes pond-orbit-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
