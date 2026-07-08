@@ -8,7 +8,18 @@ const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://toby-atlas.vercel.ap
   '',
 );
 
-const shareImageUrl = `${appUrl}/api/tobyworld/share-image?v=5`;
+/*
+  Bump this version whenever your social preview image changes.
+  This helps Farcaster/X pull the fresh image instead of cached broken metadata.
+*/
+const assetVersion = 'v7';
+
+const appName = 'Tobyworld Atlas';
+const appDescription = 'Enter the pond. Follow the wheel. Reveal your Tobyworld role.';
+
+const appIconUrl = `${appUrl}/miniapp/tobyworld-app-icon.png`;
+const splashIconUrl = `${appUrl}/miniapp/tobyworld-splash-icon.png`;
+const shareImageUrl = `${appUrl}/miniapp/tobyworld-og-image.png?${assetVersion}`;
 
 const miniAppEmbed = {
   version: '1',
@@ -17,9 +28,9 @@ const miniAppEmbed = {
     title: 'Enter Tobyworld',
     action: {
       type: 'launch_frame',
-      name: 'Tobyworld Atlas',
+      name: appName,
       url: appUrl,
-      splashImageUrl: `${appUrl}/images/atlas/toby-pond-guardian.png`,
+      splashImageUrl: splashIconUrl,
       splashBackgroundColor: '#07171f',
     },
   },
@@ -27,38 +38,73 @@ const miniAppEmbed = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
+
   title: {
-    default: 'Tobyworld Atlas',
-    template: '%s · Tobyworld Atlas',
+    default: appName,
+    template: `%s · ${appName}`,
   },
-  description: 'Enter the pond. Follow the wheel. Reveal your Tobyworld role.',
-  applicationName: 'Tobyworld Atlas',
+
+  description: appDescription,
+  applicationName: appName,
+
   icons: {
-    icon: '/images/atlas/toby-pond-guardian.png',
-    apple: '/images/atlas/toby-pond-guardian.png',
+    icon: [
+      {
+        url: '/miniapp/tobyworld-app-icon.png',
+        sizes: '1024x1024',
+        type: 'image/png',
+      },
+    ],
+    apple: [
+      {
+        url: '/miniapp/tobyworld-app-icon.png',
+        sizes: '1024x1024',
+        type: 'image/png',
+      },
+    ],
   },
+
   openGraph: {
-    title: 'Tobyworld Atlas',
-    description: 'Enter the pond. Follow the wheel. Reveal your Tobyworld role.',
+    title: appName,
+    description: appDescription,
     type: 'website',
     url: appUrl,
-    siteName: 'Tobyworld Atlas',
+    siteName: appName,
     images: [
       {
         url: shareImageUrl,
         width: 1200,
-        height: 800,
-        alt: 'Tobyworld Atlas — The pond remembers.',
+        height: 630,
+        alt: 'Tobyworld Atlas with the blue and white Toby frog.',
       },
     ],
   },
+
   twitter: {
     card: 'summary_large_image',
-    title: 'Tobyworld Atlas',
-    description: 'Enter the pond. Follow the wheel. Reveal your Tobyworld role.',
-    images: [shareImageUrl],
+    title: appName,
+    description: appDescription,
+    images: [
+      {
+        url: shareImageUrl,
+        width: 1200,
+        height: 630,
+        alt: 'Tobyworld Atlas with the blue and white Toby frog.',
+      },
+    ],
   },
+
+  appleWebApp: {
+    capable: true,
+    title: appName,
+    statusBarStyle: 'black-translucent',
+  },
+
   other: {
+    /*
+      Farcaster Mini App embed metadata.
+      Keep both for compatibility.
+    */
     'fc:miniapp': JSON.stringify(miniAppEmbed),
     'fc:frame': JSON.stringify(miniAppEmbed),
   },
