@@ -22,10 +22,13 @@ type ProfileApiResponse = {
   error?: string;
 };
 
-const ASSET_IDS: TobyworldAssetId[] = ['toby', 'patience', 'taboshi'];
+function hasPositiveTokenSignal(balance: unknown) {
+  return typeof balance === 'bigint' && balance.toString() !== '0';
+}
 
 export function TobyworldSignalProfile() {
   const miniApp = useMiniAppRuntime();
+
   const { address, isConnected, status: accountStatus } = useAccount();
   const { connectAsync, connectors, isPending: isConnecting } = useConnect();
 
@@ -34,6 +37,7 @@ export function TobyworldSignalProfile() {
   const [source, setSource] = useState<'gemini' | 'fallback' | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
   const autoConnectAttempted = useRef(false);
 
   const contracts = useMemo(
@@ -65,7 +69,7 @@ export function TobyworldSignalProfile() {
 
     TOBYWORLD_ASSETS.forEach((asset, index) => {
       const balance = balances.data?.[index]?.result;
-      result[asset.id] = typeof balance === 'bigint' && balance > 0n ? 'held' : 'not_detected';
+      result[asset.id] = hasPositiveTokenSignal(balance) ? 'held' : 'not_detected';
     });
 
     return result;
@@ -90,7 +94,10 @@ export function TobyworldSignalProfile() {
         `${connector.id} ${connector.name}`.toLowerCase().includes(needle),
       );
 
-    if (miniApp.isMiniApp) return match('farcaster') ?? connectors[0];
+    if (miniApp.isMiniApp) {
+      return match('farcaster') ?? connectors[0];
+    }
+
     return match('base') ?? match('injected') ?? connectors[0];
   }, [connectors, miniApp.isMiniApp]);
 
@@ -100,8 +107,12 @@ export function TobyworldSignalProfile() {
 
   useEffect(() => {
     refreshActivity();
+
     window.addEventListener('tobyworld:atlas-updated', refreshActivity);
-    return () => window.removeEventListener('tobyworld:atlas-updated', refreshActivity);
+
+    return () => {
+      window.removeEventListener('tobyworld:atlas-updated', refreshActivity);
+    };
   }, [refreshActivity]);
 
   useEffect(() => {
@@ -111,8 +122,6 @@ export function TobyworldSignalProfile() {
 
     autoConnectAttempted.current = true;
 
-    // In a Farcaster Mini App, the connector reuses the wallet already linked
-    // to the host. If the host has no wallet available, the regular button remains.
     void connectAsync({ connector: preferredConnector }).catch(() => undefined);
   }, [connectAsync, isConnected, miniApp.isMiniApp, preferredConnector]);
 
@@ -142,7 +151,9 @@ export function TobyworldSignalProfile() {
     try {
       const init: RequestInit = {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(profileInput),
       };
 
@@ -151,10 +162,14 @@ export function TobyworldSignalProfile() {
         : await fetch('/api/tobyworld/profile', init);
 
       const data = (await response.json()) as ProfileApiResponse;
-      if (!response.ok || !data.profile) throw new Error(data.error || 'Unable to generate profile');
+
+      if (!response.ok || !data.profile) {
+        throw new Error(data.error || 'Unable to generate profile');
+      }
 
       setGenerated(data.profile);
       setSource(data.source);
+
       setNotice(
         data.source === 'gemini'
           ? 'Your Tobyworld signal is ready. It contains no token amounts.'
@@ -178,13 +193,20 @@ export function TobyworldSignalProfile() {
           text: profile.castText,
           embeds: [appUrl],
         });
+
         setNotice('Cast composer opened. You can edit before posting.');
         return;
       }
 
       const shareText = `${profile.castText}\n${appUrl}`;
+
       if (navigator.share) {
-        await navigator.share({ title: 'My Tobyworld Signal', text: shareText, url: appUrl });
+        await navigator.share({
+          title: 'My Tobyworld Signal',
+          text: shareText,
+          url: appUrl,
+        });
+
         setNotice('Share sheet opened.');
         return;
       }
@@ -202,14 +224,16 @@ export function TobyworldSignalProfile() {
     const appUrl = `${window.location.origin}/?signal=tobyworld`;
     const text = `${profile.tweetText}\n${appUrl}`;
     const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+
     window.open(intent, '_blank', 'noopener,noreferrer');
   }
 
-  const assetStatus = (assetId: TobyworldAssetId) => {
+  function assetStatus(assetId: TobyworldAssetId) {
     if (!isConnected) return 'connect to read';
     if (balances.isLoading || balances.isFetching) return 'reading signal';
+
     return assetSignals[assetId] === 'held' ? 'signal present' : 'not detected';
-  };
+  }
 
   return (
     <section className="signal-profile" aria-label="Your Tobyworld signal">
@@ -220,8 +244,8 @@ export function TobyworldSignalProfile() {
           <p className="signal-kicker">YOUR TOBYWORLD SIGNAL</p>
           <h2>Read the pond. Keep the numbers private.</h2>
           <p>
-            The atlas reads onchain presence locally, combines it with the rituals you have discovered,
-            then turns the result into a shareable lore identity.
+            The atlas reads onchain presence locally, combines it with the rituals you have
+            discovered, then turns the result into a shareable lore identity.
           </p>
         </div>
 
@@ -262,14 +286,17 @@ export function TobyworldSignalProfile() {
         {TOBYWORLD_ASSETS.map((asset) => (
           <article className={`signal-asset-card accent-${asset.accent}`} key={asset.id}>
             <img src={asset.imageSrc} alt="" aria-hidden="true" />
+
             <div className="signal-asset-copy">
               <span>{asset.symbol}</span>
               <strong>{asset.name}</strong>
               <small>{assetStatus(asset.id)}</small>
             </div>
+
             <details>
               <summary>How it fits</summary>
               <p>{asset.howItFits}</p>
+
               <div className="signal-asset-links">
                 {asset.links.map((link) => (
                   <a key={link.href} href={link.href} target="_blank" rel="noreferrer">
@@ -287,24 +314,37 @@ export function TobyworldSignalProfile() {
           <p className="signal-kicker">ATLAS ACTIVITY</p>
           <h3>What your world remembers</h3>
         </div>
+
         <button type="button" className="signal-refresh" onClick={refreshActivity}>
           Refresh signals ↻
         </button>
 
         <div className="signal-activity-chips">
           <ActivityChip active={activity.stillWaterAwakened} label="Still Water" icon="△" />
-          <ActivityChip active={activity.gardenLeaves > 0} label={`${activity.gardenLeaves}/3 leaves`} icon="🍃" />
+          <ActivityChip
+            active={activity.gardenLeaves > 0}
+            label={`${activity.gardenLeaves}/3 leaves`}
+            icon="🍃"
+          />
           <ActivityChip active={activity.satoAwake} label="Sato return" icon="🌀" />
           <ActivityChip active={activity.lorelandSeen} label="Loreland" icon="✦" />
         </div>
       </div>
 
       <article className={`signal-profile-result accent-${profile.accent}`}>
-        <span className="signal-result-orb" aria-hidden="true">✦</span>
+        <span className="signal-result-orb" aria-hidden="true">
+          ✦
+        </span>
+
         <p className="signal-kicker">{profile.archetype}</p>
         <h3>{profile.title}</h3>
         <p>{profile.narrative}</p>
-        {source && <small className="signal-source-note">{source === 'gemini' ? 'Lore shaped from your private signals.' : 'Atlas fallback profile.'}</small>}
+
+        {source && (
+          <small className="signal-source-note">
+            {source === 'gemini' ? 'Lore shaped from your private signals.' : 'Atlas fallback profile.'}
+          </small>
+        )}
       </article>
 
       <div className="signal-actions">
@@ -316,26 +356,40 @@ export function TobyworldSignalProfile() {
         >
           {isGenerating ? 'Reading the pond…' : 'Generate my lore signal ✦'}
         </button>
+
         <button type="button" className="signal-share-button" onClick={shareToFarcaster}>
           Cast
         </button>
+
         <button type="button" className="signal-share-button" onClick={shareToX}>
           Post to X
         </button>
       </div>
 
-      {notice && <p className="signal-notice" role="status">{notice}</p>}
+      {notice && (
+        <p className="signal-notice" role="status">
+          {notice}
+        </p>
+      )}
 
       <p className="signal-privacy-note">
-        Token balances are read only in the browser to decide whether an asset signal is present. The profile request sends only
-        <strong> present / not detected </strong>
-        states and Atlas activity—never raw balances, token amounts, wallet value, or your wallet address.
+        Token balances are read only in the browser to decide whether an asset signal is present. The
+        profile request sends only <strong>present / not detected</strong> states and Atlas
+        activity—never raw balances, token amounts, wallet value, or your wallet address.
       </p>
     </section>
   );
 }
 
-function ActivityChip({ active, icon, label }: { active: boolean; icon: string; label: string }) {
+function ActivityChip({
+  active,
+  icon,
+  label,
+}: {
+  active: boolean;
+  icon: string;
+  label: string;
+}) {
   return (
     <span className={`signal-activity-chip ${active ? 'is-active' : ''}`}>
       <b>{icon}</b>
