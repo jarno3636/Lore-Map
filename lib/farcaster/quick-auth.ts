@@ -1,4 +1,4 @@
-import { Errors, createClient } from '@farcaster/quick-auth';
+import { createClient } from '@farcaster/quick-auth';
 
 const quickAuthClient = createClient();
 
@@ -26,9 +26,10 @@ export async function requireFarcasterFid(request: Request) {
       domain: getAppDomain(),
     });
 
-    const fid = Number(payload.sub);
+    const rawFid = payload.sub;
+    const fid = Number(rawFid);
 
-    if (!Number.isFinite(fid)) {
+    if (!Number.isFinite(fid) || fid <= 0) {
       return {
         ok: false as const,
         status: 401,
@@ -41,18 +42,12 @@ export async function requireFarcasterFid(request: Request) {
       fid,
     };
   } catch (error) {
-    if (error instanceof Errors.InvalidTokenError) {
-      return {
-        ok: false as const,
-        status: 401,
-        error: 'Invalid Farcaster auth token.',
-      };
-    }
+    console.error('Farcaster Quick Auth failed:', error);
 
     return {
       ok: false as const,
-      status: 500,
-      error: 'Unable to verify Farcaster auth token.',
+      status: 401,
+      error: error instanceof Error ? error.message : 'Unable to verify Farcaster auth token.',
     };
   }
 }
