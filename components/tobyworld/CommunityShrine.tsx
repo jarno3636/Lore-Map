@@ -29,7 +29,7 @@ type ShrineResponse = {
   error?: string;
 };
 
-const SHARE_VERSION = 'shrine-v1';
+const SHARE_VERSION = 'shrine-v2';
 
 function getShareUrl() {
   const url = new URL(window.location.origin);
@@ -74,6 +74,37 @@ function getShrineInviteText() {
   ].join('\n');
 }
 
+function getDisplayName(event: ShrineEvent) {
+  const name = event.displayName?.trim();
+
+  if (name) return name;
+
+  if (event.username) return `@${event.username}`;
+
+  return 'Pond Visitor';
+}
+
+function getHandleLine(event: ShrineEvent) {
+  if (event.username) return `@${event.username}`;
+
+  return 'Tobyworld traveler';
+}
+
+function getInitial(event: ShrineEvent) {
+  const name = getDisplayName(event).replace('@', '').trim();
+
+  return name ? name.slice(0, 1).toUpperCase() : event.riteIcon;
+}
+
+function getTopEvent(events: ShrineEvent[]) {
+  return (
+    events.find((event) => event.streak >= 7) ??
+    events.find((event) => event.streak >= 3) ??
+    events[0] ??
+    null
+  );
+}
+
 export function CommunityShrine() {
   const miniApp = useMiniAppRuntime();
 
@@ -83,8 +114,21 @@ export function CommunityShrine() {
 
   const events = data?.events ?? [];
 
-  const topEvent = useMemo(() => {
-    return events.find((event) => event.streak >= 3) ?? events[0] ?? null;
+  const topEvent = useMemo(() => getTopEvent(events), [events]);
+
+  const avatarEvents = useMemo(() => {
+    const seen = new Set<string>();
+
+    return events
+      .filter((event) => {
+        const key = event.username ?? String(event.fid);
+
+        if (seen.has(key)) return false;
+
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 9);
   }, [events]);
 
   const fetchShrine = useCallback(async () => {
@@ -158,13 +202,16 @@ export function CommunityShrine() {
   return (
     <section className="community-shrine" aria-label="Tobyworld Community Shrine">
       <div className="community-shrine-glow" aria-hidden="true" />
+      <div className="community-shrine-orb community-shrine-orb-one" aria-hidden="true" />
+      <div className="community-shrine-orb community-shrine-orb-two" aria-hidden="true" />
 
       <header className="community-shrine-header">
         <div>
           <p>COMMUNITY SHRINE</p>
           <h2>The pond is not empty.</h2>
           <span>
-            Recent rites completed by the community. Every echo comes from a saved Farcaster FID.
+            Recent Daily Rite echoes from the Tobyworld community. Faces first,
+            streaks second, no noisy leaderboard energy.
           </span>
         </div>
 
@@ -173,30 +220,71 @@ export function CommunityShrine() {
         </button>
       </header>
 
+      <div className="community-shrine-avatar-rail" aria-label="Recent pond visitors">
+        {avatarEvents.length > 0 ? (
+          avatarEvents.map((event) => (
+            <div className="community-shrine-avatar" key={`${event.id}-avatar`}>
+              {event.pfpUrl ? (
+                <img src={event.pfpUrl} alt="" aria-hidden="true" />
+              ) : (
+                <span>{getInitial(event)}</span>
+              )}
+
+              <small>{event.riteIcon}</small>
+            </div>
+          ))
+        ) : (
+          <div className="community-shrine-avatar is-empty">
+            <span>🐸</span>
+            <small>✦</small>
+          </div>
+        )}
+      </div>
+
       <div className="community-shrine-stats">
         <div>
           <strong>{data?.todayEchoes ?? 0}</strong>
           <span>today</span>
         </div>
+
         <div>
           <strong>{data?.totalEchoes ?? 0}</strong>
           <span>all echoes</span>
         </div>
+
         <div>
           <strong>{events.length}</strong>
-          <span>showing</span>
+          <span>visible</span>
         </div>
       </div>
 
       {topEvent && (
         <article className="community-shrine-feature">
-          <span>{topEvent.riteIcon}</span>
-          <div>
-            <p>RECENT ECHO</p>
-            <h3>{topEvent.displayName}</h3>
-            <small>
-              completed {topEvent.riteTitle} · {topEvent.streak} day streak · {topEvent.mark}
-            </small>
+          <div className="community-shrine-feature-pfp">
+            {topEvent.pfpUrl ? (
+              <img src={topEvent.pfpUrl} alt="" aria-hidden="true" />
+            ) : (
+              <span>{getInitial(topEvent)}</span>
+            )}
+
+            <b>{topEvent.riteIcon}</b>
+          </div>
+
+          <div className="community-shrine-feature-copy">
+            <p>FEATURED ECHO</p>
+            <h3>{getDisplayName(topEvent)}</h3>
+            <small>{getHandleLine(topEvent)} · {getRelativeTime(topEvent.completedAt)}</small>
+
+            <div className="community-shrine-feature-line">
+              <span>{topEvent.riteIcon}</span>
+              <strong>{topEvent.riteTitle}</strong>
+            </div>
+
+            <footer>
+              <span>{topEvent.mark}</span>
+              <span>{topEvent.streak} day streak</span>
+              <span>{topEvent.totalCompletions} rites</span>
+            </footer>
           </div>
         </article>
       )}
@@ -209,26 +297,31 @@ export function CommunityShrine() {
                 {event.pfpUrl ? (
                   <img src={event.pfpUrl} alt="" aria-hidden="true" />
                 ) : (
-                  <span>{event.riteIcon}</span>
+                  <span>{getInitial(event)}</span>
                 )}
+
+                <b>{event.riteIcon}</b>
               </div>
 
               <div className="community-shrine-copy">
-                <div>
-                  <strong>{event.displayName}</strong>
-                  <small>
-                    {event.username ? `@${event.username}` : `FID ${event.fid}`} ·{' '}
-                    {getRelativeTime(event.completedAt)}
-                  </small>
+                <div className="community-shrine-name-row">
+                  <div>
+                    <strong>{getDisplayName(event)}</strong>
+                    <small>
+                      {getHandleLine(event)} · {getRelativeTime(event.completedAt)}
+                    </small>
+                  </div>
+
+                  <span className="community-shrine-mini-mark">{event.mark}</span>
                 </div>
 
                 <p>
-                  {event.riteIcon} Completed <b>{event.riteTitle}</b>
+                  Completed <b>{event.riteTitle}</b>
                 </p>
 
                 <footer>
-                  <span>{event.mark}</span>
                   <span>{event.streak} day streak</span>
+                  <span>{event.totalCompletions} total rites</span>
                 </footer>
               </div>
             </article>
@@ -236,7 +329,7 @@ export function CommunityShrine() {
         ) : (
           <div className="community-shrine-empty">
             <strong>{isLoading ? 'Reading the shrine…' : 'No echoes yet.'}</strong>
-            <span>Complete the Daily Rite to become one of the first names in the pond.</span>
+            <span>Complete the Daily Rite to become one of the first faces in the pond.</span>
           </div>
         )}
       </div>
@@ -246,7 +339,7 @@ export function CommunityShrine() {
           {isLoading ? 'Refreshing…' : 'Refresh Shrine ↻'}
         </button>
 
-        <a href="#daily-rite">Complete Daily Rite ✦</a>
+        <a href="/#daily-rite">Complete Daily Rite ✦</a>
       </div>
 
       {notice && (
