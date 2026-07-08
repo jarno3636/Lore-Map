@@ -3,18 +3,23 @@ import type { ReactNode } from 'react';
 import { Providers } from './providers';
 import './globals.css';
 
-const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://toby-atlas.vercel.app').replace(
+  /\/+$/,
+  '',
+);
+
+const shareImageUrl = `${appUrl}/api/tobyworld/share-image?v=5`;
 
 const miniAppEmbed = {
   version: '1',
-  imageUrl: `${appUrl}/miniapp/tobyworld-og-image.png`,
+  imageUrl: shareImageUrl,
   button: {
     title: 'Enter Tobyworld',
     action: {
       type: 'launch_frame',
       name: 'Tobyworld Atlas',
       url: appUrl,
-      splashImageUrl: `${appUrl}/miniapp/tobyworld-splash-icon.png`,
+      splashImageUrl: `${appUrl}/images/atlas/toby-pond-guardian.png`,
       splashBackgroundColor: '#07171f',
     },
   },
@@ -22,43 +27,37 @@ const miniAppEmbed = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
-
   title: {
-    default: 'Tobyworld — The Living Flywheel',
-    template: '%s · Tobyworld',
+    default: 'Tobyworld Atlas',
+    template: '%s · Tobyworld Atlas',
   },
-
-  description: 'An interactive lore atlas for the $TOBY ecosystem.',
+  description: 'Enter the pond. Follow the wheel. Reveal your Tobyworld role.',
   applicationName: 'Tobyworld Atlas',
-
   icons: {
-    icon: '/miniapp/tobyworld-app-icon.png',
-    apple: '/miniapp/tobyworld-app-icon.png',
+    icon: '/images/atlas/toby-pond-guardian.png',
+    apple: '/images/atlas/toby-pond-guardian.png',
   },
-
   openGraph: {
-    title: 'Tobyworld — The Living Flywheel',
-    description: 'Plant stillness. Tend the world. Follow the runes.',
+    title: 'Tobyworld Atlas',
+    description: 'Enter the pond. Follow the wheel. Reveal your Tobyworld role.',
     type: 'website',
     url: appUrl,
     siteName: 'Tobyworld Atlas',
     images: [
       {
-        url: '/miniapp/tobyworld-og-image.png',
+        url: shareImageUrl,
         width: 1200,
-        height: 630,
-        alt: 'Cute blue Toby frog exploring a glowing Tobyworld atlas map.',
+        height: 800,
+        alt: 'Tobyworld Atlas — The pond remembers.',
       },
     ],
   },
-
   twitter: {
     card: 'summary_large_image',
-    title: 'Tobyworld — The Living Flywheel',
-    description: 'Plant stillness. Tend the world. Follow the runes.',
-    images: ['/miniapp/tobyworld-og-image.png'],
+    title: 'Tobyworld Atlas',
+    description: 'Enter the pond. Follow the wheel. Reveal your Tobyworld role.',
+    images: [shareImageUrl],
   },
-
   other: {
     'fc:miniapp': JSON.stringify(miniAppEmbed),
     'fc:frame': JSON.stringify(miniAppEmbed),
