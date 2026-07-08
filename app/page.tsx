@@ -3,44 +3,56 @@ import { TobyworldSignalProfile } from '@/components/tobyworld/TobyworldSignalPr
 
 const featureCards = [
   {
-    eyebrow: 'LIVING ATLAS',
-    title: 'Follow the flywheel',
-    copy: 'Move through the pond, the red grain, the green leaf, the blue current, Loreland, and the locked golden gate.',
-    icon: '☷',
+    eyebrow: 'THE POND',
+    title: 'Toby waits',
+    copy: 'The still center.',
+    icon: '🐸',
   },
   {
-    eyebrow: 'STILL WATER',
-    title: 'Plant patience',
-    copy: 'The map is not meant to be rushed. Hold still, wake the ripple, and let the pond remember your path.',
+    eyebrow: 'RED GRAIN',
+    title: 'Patience falls',
+    copy: 'The first ripple.',
     icon: '△',
   },
   {
-    eyebrow: 'LORE IDENTITY',
-    title: 'Share your role',
-    copy: 'Create a Tobyworld identity shaped by your path through the Atlas, then cast it without exposing token amounts.',
+    eyebrow: 'LEAF GARDEN',
+    title: 'Taboshi grows',
+    copy: 'The quiet bloom.',
+    icon: '🍃',
+  },
+  {
+    eyebrow: 'BLUE CURRENT',
+    title: 'Sato returns',
+    copy: 'The moving water.',
+    icon: '🌀',
+  },
+  {
+    eyebrow: 'GOLDEN GATE',
+    title: 'The lock hums',
+    copy: 'Not all paths open.',
     icon: '✦',
   },
 ];
 
 const loreSteps = [
   {
-    title: 'Toby holds the center',
-    copy: 'The frog does not chase the loop. The world moves around the pond.',
+    title: 'Still water',
+    copy: 'Begin at the pond.',
     icon: '🐸',
   },
   {
-    title: 'Patience begins the ritual',
-    copy: 'A single red grain lands. The ripple expands, then sleeps.',
+    title: 'Red ripple',
+    copy: 'Patience enters.',
     icon: '△',
   },
   {
-    title: 'Taboshi tends the garden',
-    copy: 'The leaf gives the still water something to grow.',
+    title: 'Green bloom',
+    copy: 'The leaf awakens.',
     icon: '🍃',
   },
   {
-    title: 'Sato returns the current',
-    copy: 'The blue swirl carries motion back toward the pond.',
+    title: 'Blue return',
+    copy: 'The current bends back.',
     icon: '🌀',
   },
 ];
@@ -58,18 +70,17 @@ export default function Home() {
 
       <section className="home-hero">
         <div className="home-hero-copy">
-          <p className="home-kicker">TOBYWORLD · THE LIVING FLYWHEEL</p>
+          <p className="home-kicker">TOBYWORLD · LIVING POND</p>
 
           <h1>
             Enter the pond.
             <br />
-            Let the map remember.
+            Follow the wheel.
           </h1>
 
           <p>
-            A mobile-first lore Atlas for Tobyworld. Plant patience, tend the
-            garden, follow the returning current, and discover the role the pond
-            gives you.
+            Toby waits at the center. Patience falls. The leaf grows. The blue
+            current returns.
           </p>
 
           <div className="home-hero-actions">
@@ -77,22 +88,24 @@ export default function Home() {
               Open Atlas
             </a>
             <a href="#pond-role" className="home-secondary-link">
-              Find Your Pond Role
+              Reveal Role
             </a>
           </div>
 
-          <div className="home-ritual-line" aria-label="Tobyworld ritual path">
-            <span>△ Patience</span>
+          <div className="home-ritual-line" aria-label="Tobyworld path">
+            <span>△</span>
             <i />
-            <span>🐸 Toby</span>
+            <span>🐸</span>
             <i />
-            <span>🍃 Taboshi</span>
+            <span>🍃</span>
             <i />
-            <span>🌀 Sato</span>
+            <span>🌀</span>
+            <i />
+            <span>✦</span>
           </div>
         </div>
 
-        <div className="home-hero-card" aria-label="Tobyworld app preview">
+        <div className="home-hero-card" aria-label="Tobyworld pond preview">
           <div className="home-phone-frame">
             <div className="home-phone-top">
               <span />
@@ -105,7 +118,7 @@ export default function Home() {
               <img
                 className="home-preview-image"
                 src="/images/atlas/toby-pond-guardian.png"
-                alt="Toby frog over a glowing fantasy map"
+                alt="Toby guarding a glowing mythic pond"
               />
 
               <div className="home-map-rings" aria-hidden="true">
@@ -124,13 +137,13 @@ export default function Home() {
 
             <div className="home-preview-copy">
               <strong>The pond remembers.</strong>
-              <small>Plant stillness · Tend the world · Follow the runes</small>
+              <small>Stillness · Bloom · Return</small>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="home-feature-grid" aria-label="Tobyworld features">
+      <section className="home-feature-grid" aria-label="Tobyworld regions">
         {featureCards.map((feature) => (
           <article className="home-feature-card" key={feature.title}>
             <span className="home-feature-icon">{feature.icon}</span>
@@ -141,14 +154,11 @@ export default function Home() {
         ))}
       </section>
 
-      <section className="home-lore-path" aria-label="Tobyworld lore path">
+      <section className="home-lore-path" aria-label="Tobyworld ritual path">
         <div className="home-section-heading">
-          <p className="home-kicker">THE RITUAL PATH</p>
-          <h2>Stillness first. Motion after.</h2>
-          <p>
-            Tobyworld works best when the flywheel feels like a mythic place,
-            not a dashboard. Each symbol should feel like a region of the pond.
-          </p>
+          <p className="home-kicker">THE RITUAL</p>
+          <h2>Stillness first.</h2>
+          <p>Each symbol is a place. Each place remembers.</p>
         </div>
 
         <div className="home-lore-steps">
@@ -165,11 +175,8 @@ export default function Home() {
       <section id="atlas" className="home-section">
         <div className="home-section-heading">
           <p className="home-kicker">ATLAS</p>
-          <h2>The flywheel should feel alive.</h2>
-          <p>
-            Toby stays fixed at the center while the world moves around him.
-            Touch the nodes, open lore panels, and move through the ritual path.
-          </p>
+          <h2>The living flywheel.</h2>
+          <p>Touch the runes. Wake the pond.</p>
         </div>
 
         <TobyworldAtlas />
@@ -177,13 +184,9 @@ export default function Home() {
 
       <section id="pond-role" className="home-section home-signal-section">
         <div className="home-section-heading">
-          <p className="home-kicker">POND ROLE</p>
-          <h2>Your Tobyworld role, shaped by still water.</h2>
-          <p>
-            Connect your wallet privately, let the Atlas check which Tobyworld
-            symbols are present, and create a cast-ready lore identity without
-            posting token amounts.
-          </p>
+          <p className="home-kicker">SHRINE</p>
+          <h2>Ask the pond.</h2>
+          <p>Reveal the role your path carries.</p>
         </div>
 
         <TobyworldSignalProfile />
@@ -200,7 +203,7 @@ export default function Home() {
             Rune III ↗
           </a>
           <a href="https://x.com/toadgod1017" target="_blank" rel="noreferrer">
-            Signal on X ↗
+            Signal ↗
           </a>
         </div>
       </section>
