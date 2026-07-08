@@ -66,7 +66,8 @@ export default function Home() {
 
             <div className="home-map-preview">
               <img
-                src="/miniapp/tobyworld-app-icon.png"
+                className="home-preview-image"
+                src="/images/atlas/toby-pond-guardian.png"
                 alt="Toby frog over a glowing fantasy map"
               />
 
