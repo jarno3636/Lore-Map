@@ -9,27 +9,29 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@base-org/account": "^2.5.4",
+    "@base-org/account": "^2.5.7",
     "@farcaster/miniapp-sdk": "^0.3.0",
     "@farcaster/miniapp-wagmi-connector": "^2.0.0",
     "@farcaster/quick-auth": "^0.0.8",
     "@google/genai": "^2.10.0",
-    "@tanstack/react-query": "^5.0.0",
-    "next": "^16.1.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "viem": "^2.0.0",
-    "wagmi": "^2.0.0"
+    "@supabase/supabase-js": "^2.110.0",
+    "@tanstack/react-query": "^5.101.2",
+    "next": "^16.2.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "viem": "^2.54.6",
+    "wagmi": "^2.16.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
-    "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "eslint": "^9.18.0",
-    "eslint-config-next": "^16.1.0",
-    "typescript": "^5.7.2"
+    "eslint-config-next": "^16.2.10",
+    "typescript": "^5.9.3"
   }
 }
