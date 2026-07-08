@@ -28,8 +28,8 @@ const featureCards = [
   },
   {
     eyebrow: 'GOLDEN GATE',
-    title: 'The lock hums',
-    copy: 'Not all paths open.',
+    title: 'Be still',
+    copy: 'Not all paths yet open.',
     icon: '✦',
   },
 ];
