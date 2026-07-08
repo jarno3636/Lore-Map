@@ -18,6 +18,13 @@ type ShrineEventRow = {
   total_completions: number | null;
 };
 
+type DailyProfileRow = {
+  fid: number;
+  username: string | null;
+  display_name: string | null;
+  pfp_url: string | null;
+};
+
 const RITE_DETAILS: Record<string, { icon: string; title: string }> = {
   'still-water': {
     icon: '△',
@@ -57,6 +64,15 @@ function getTodayUtc() {
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return 'Unknown server error.';
+}
+
+function cleanDisplayName(value: string | null | undefined) {
+  const cleaned = value?.trim();
+
+  if (!cleaned) return null;
+  if (/^fid\s+\d+$/i.test(cleaned)) return null;
+
+  return cleaned;
 }
 
 export async function GET() {
@@ -99,18 +115,49 @@ export async function GET() {
       throw new Error(`Shrine today count failed: ${todayResult.error.message}`);
     }
 
-    const events = ((recentResult.data ?? []) as ShrineEventRow[]).map((event) => {
+    const rows = (recentResult.data ?? []) as ShrineEventRow[];
+    const fids = Array.from(new Set(rows.map((row) => row.fid)));
+
+    const profileMap = new Map<number, DailyProfileRow>();
+
+    if (fids.length > 0) {
+      const { data: profiles, error: profileError } = await supabase
+        .from('tobyworld_daily_rites')
+        .select('fid, username, display_name, pfp_url')
+        .in('fid', fids);
+
+      if (profileError) {
+        throw new Error(`Shrine profile read failed: ${profileError.message}`);
+      }
+
+      ((profiles ?? []) as DailyProfileRow[]).forEach((profile) => {
+        profileMap.set(profile.fid, profile);
+      });
+    }
+
+    const events = rows.map((event) => {
       const rite = RITE_DETAILS[event.rite_key] ?? {
         icon: '✦',
         title: 'Unknown Rite',
       };
 
+      const profile = profileMap.get(event.fid);
+
+      const username = event.username ?? profile?.username ?? null;
+      const displayName =
+        cleanDisplayName(event.display_name) ??
+        cleanDisplayName(profile?.display_name) ??
+        username ??
+        'Pond Visitor';
+
+      const pfpUrl = event.pfp_url ?? profile?.pfp_url ?? null;
+
       return {
         id: event.id,
         fid: event.fid,
-        username: event.username,
-        displayName: event.display_name ?? event.username ?? `FID ${event.fid}`,
-        pfpUrl: event.pfp_url,
+        username,
+        displayName,
+        pfpUrl,
         riteDate: event.rite_date,
         riteKey: event.rite_key,
         riteTitle: rite.title,
