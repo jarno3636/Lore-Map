@@ -22,12 +22,6 @@ type ProfileApiResponse = {
   error?: string;
 };
 
-type QuickAuthSdk = typeof sdk & {
-  quickAuth?: {
-    fetch: typeof fetch;
-  };
-};
-
 const TOKEN_DECIMALS: Record<TobyworldAssetId, number> = {
   toby: 18,
   patience: 18,
@@ -79,6 +73,19 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+function safeReadAtlasActivity() {
+  try {
+    return readAtlasActivity();
+  } catch {
+    return {
+      stillWaterAwakened: false,
+      gardenLeaves: 0,
+      satoAwake: false,
+      lorelandSeen: false,
+    } satisfies TobyworldActivity;
+  }
+}
+
 function countAtlasRituals(activity: TobyworldActivity) {
   let count = 0;
 
@@ -106,7 +113,7 @@ export function TobyworldSignalProfile() {
   const { address, isConnected, status: accountStatus } = useAccount();
   const { connectAsync, connectors, isPending: isConnecting } = useConnect();
 
-  const [activity, setActivity] = useState<TobyworldActivity>(() => readAtlasActivity());
+  const [activity, setActivity] = useState<TobyworldActivity>(() => safeReadAtlasActivity());
   const [generated, setGenerated] = useState<TobyworldGeneratedProfile | null>(null);
   const [source, setSource] = useState<'gemini' | 'fallback' | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -204,7 +211,7 @@ export function TobyworldSignalProfile() {
   }, [connectors, miniApp.isMiniApp]);
 
   const refreshActivity = useCallback(() => {
-    setActivity(readAtlasActivity());
+    setActivity(safeReadAtlasActivity());
   }, []);
 
   useEffect(() => {
@@ -271,25 +278,28 @@ export function TobyworldSignalProfile() {
         headers: {
           'Content-Type': 'application/json',
         },
-
-        /*
-          This sends only held / not_detected states and Atlas activity.
-          It does not send raw balances, token amounts, wallet value, or wallet address.
-        */
         body: JSON.stringify(profileInput),
       };
 
-      const quickAuthFetch = (sdk as QuickAuthSdk).quickAuth?.fetch;
+      /*
+        Use regular fetch for both webpage and Farcaster.
 
-      const response =
-        miniApp.isMiniApp && quickAuthFetch
-          ? await quickAuthFetch('/api/tobyworld/profile', init)
-          : await fetch('/api/tobyworld/profile', init);
+        This endpoint does not need Farcaster Quick Auth.
+        The webpage already works with regular fetch, so Farcaster should use
+        the same path to avoid Quick Auth/domain validation issues.
+      */
+      const response = await fetch('/api/tobyworld/profile', init);
 
-      const data = (await response.json()) as ProfileApiResponse;
+      let data: ProfileApiResponse | null = null;
+
+      try {
+        data = (await response.json()) as ProfileApiResponse;
+      } catch {
+        throw new Error(`Profile API returned ${response.status} without valid JSON.`);
+      }
 
       if (!response.ok || !data.profile) {
-        throw new Error(data.error || 'Unable to generate profile');
+        throw new Error(data.error || `Profile API failed with ${response.status}.`);
       }
 
       setGenerated(data.profile);
@@ -297,13 +307,20 @@ export function TobyworldSignalProfile() {
 
       setNotice(
         data.source === 'gemini'
-          ? 'Your pond role is ready. Shared text does not include token amounts.'
-          : 'The lore engine is resting, so the pond shaped a role from your local path.',
+          ? 'The pond answered. Your shared quote does not include token amounts.'
+          : 'The lore engine rested, so the pond shaped a fallback role from your path.',
       );
-    } catch {
+    } catch (error) {
+      console.error('Tobyworld profile generation failed:', error);
+
       setGenerated(fallbackProfile);
       setSource('fallback');
-      setNotice('The lore engine is resting, so the pond shaped a role from your local path.');
+
+      setNotice(
+        error instanceof Error
+          ? `The pond used a fallback role: ${error.message}`
+          : 'The pond used a fallback role because the lore engine failed here.',
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -367,6 +384,8 @@ export function TobyworldSignalProfile() {
     return assetAmounts[assetId];
   }
 
+  const shareQuote = buildShareQuote();
+
   return (
     <section className="signal-profile pond-profile" aria-label="Your Tobyworld pond role">
       <div className="signal-profile-glow" aria-hidden="true" />
@@ -406,6 +425,18 @@ export function TobyworldSignalProfile() {
           <b>{ritualCount}</b>
           <small>rituals</small>
         </div>
+      </div>
+
+      <div className="pond-rune-trail" aria-label="Tobyworld rune path">
+        <span>△</span>
+        <i />
+        <span>🐸</span>
+        <i />
+        <span>🍃</span>
+        <i />
+        <span>🌀</span>
+        <i />
+        <span>✦</span>
       </div>
 
       <div className="signal-wallet-row pond-wallet-row">
@@ -511,9 +542,18 @@ export function TobyworldSignalProfile() {
 
         {source && (
           <small className="signal-source-note">
-            {source === 'gemini' ? 'Lore shaped from your private pond path.' : 'Atlas fallback role.'}
+            {source === 'gemini' ? 'Lore shaped by Gemini from your private pond path.' : 'Atlas fallback role.'}
           </small>
         )}
+      </article>
+
+      <article className="pond-cast-preview" aria-label="Cast preview">
+        <div>
+          <p className="signal-kicker">CAST PREVIEW</p>
+          <h3>The quote the pond will send</h3>
+        </div>
+
+        <pre>{shareQuote}</pre>
       </article>
 
       <div className="signal-actions pond-actions">
@@ -527,11 +567,11 @@ export function TobyworldSignalProfile() {
         </button>
 
         <button type="button" className="signal-share-button" onClick={shareToFarcaster}>
-          Cast
+          Cast Quote
         </button>
 
         <button type="button" className="signal-share-button" onClick={shareToX}>
-          Post to X
+          Post Quote
         </button>
       </div>
 
