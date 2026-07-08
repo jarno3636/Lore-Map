@@ -2094,3 +2094,212 @@ img {
     grid-template-columns: 1fr 1fr;
   }
 }
+/* -------------------------------------------------------------------------- */
+/* Tobyworld Top Navigation                                                    */
+/* -------------------------------------------------------------------------- */
+
+.toby-nav {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  width: 100%;
+  padding: 10px clamp(12px, 3vw, 22px);
+  background:
+    linear-gradient(180deg, rgba(3, 13, 18, 0.92), rgba(3, 13, 18, 0.58)),
+    radial-gradient(circle at 50% 0%, rgba(103, 213, 246, 0.12), transparent 52%);
+  border-bottom: 1px solid rgba(146, 223, 241, 0.12);
+  backdrop-filter: blur(18px);
+}
+
+.toby-nav-inner {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  width: min(100%, 1180px);
+  margin-inline: auto;
+}
+
+.toby-nav-brand {
+  display: inline-grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+  color: #fff8e6;
+  text-decoration: none;
+}
+
+.toby-nav-brand-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(146, 223, 241, 0.22);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(103, 213, 246, 0.22), transparent 62%),
+    rgba(7, 31, 40, 0.84);
+  box-shadow: 0 0 24px rgba(103, 213, 246, 0.12);
+}
+
+.toby-nav-brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.toby-nav-brand strong,
+.toby-nav-brand small {
+  display: block;
+}
+
+.toby-nav-brand strong {
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.toby-nav-brand small {
+  margin-top: 1px;
+  color: #8ddff1;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.toby-nav-links {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.toby-nav-links::-webkit-scrollbar {
+  display: none;
+}
+
+.toby-nav-link {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+  border: 1px solid rgba(146, 223, 241, 0.13);
+  border-radius: 999px;
+  padding: 9px 11px;
+  color: #c9e8ed;
+  background: rgba(7, 31, 40, 0.62);
+  font-size: 11px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.toby-nav-link span {
+  filter: drop-shadow(0 0 10px rgba(141, 233, 255, 0.28));
+}
+
+.toby-nav-link b {
+  font: inherit;
+}
+
+.toby-nav-link:hover,
+.toby-nav-link.is-active {
+  color: #061419;
+  border-color: transparent;
+  background: linear-gradient(135deg, #f8d77d, #8de9ff);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Community Page                                                              */
+/* -------------------------------------------------------------------------- */
+
+.community-page-shell {
+  padding-top: clamp(28px, 6vw, 54px);
+}
+
+.community-page-hero {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 960px);
+  margin: 0 auto;
+  padding: clamp(28px, 8vw, 70px) clamp(18px, 5vw, 44px);
+  border: 1px solid rgba(249, 201, 104, 0.18);
+  border-radius: 36px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(249, 201, 104, 0.16), transparent 36%),
+    radial-gradient(circle at 88% 16%, rgba(103, 213, 246, 0.14), transparent 34%),
+    rgba(4, 21, 28, 0.56);
+  box-shadow:
+    inset 0 0 70px rgba(249, 201, 104, 0.04),
+    0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.community-page-hero h1 {
+  margin: 12px 0 14px;
+  color: #fff8e6;
+  font-family: Georgia, serif;
+  font-size: clamp(52px, 14vw, 112px);
+  line-height: 0.86;
+  letter-spacing: -0.08em;
+}
+
+.community-page-hero > p:not(.home-kicker) {
+  max-width: 650px;
+  margin: 0;
+  color: #c8e1e6;
+  font-size: clamp(17px, 4vw, 22px);
+  line-height: 1.55;
+}
+
+.community-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.community-page-actions a {
+  border: 1px solid rgba(146, 223, 241, 0.16);
+  border-radius: 999px;
+  padding: 12px 15px;
+  color: #061419;
+  background: linear-gradient(135deg, #f8d77d, #8de9ff);
+  font-size: 12px;
+  font-weight: 950;
+  text-decoration: none;
+}
+
+.community-page-actions a + a {
+  color: #dff8ff;
+  background: rgba(7, 31, 40, 0.68);
+}
+
+@media (max-width: 560px) {
+  .toby-nav {
+    padding-inline: 8px;
+  }
+
+  .toby-nav-inner {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .toby-nav-brand {
+    justify-content: center;
+  }
+
+  .toby-nav-links {
+    justify-content: flex-start;
+  }
+
+  .toby-nav-link {
+    padding: 9px 10px;
+  }
+}
