@@ -28,11 +28,51 @@ type DailyRiteResponse = {
 
 type QuickAuthSdk = typeof sdk & {
   quickAuth?: {
-    fetch: typeof fetch;
+    fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   };
 };
 
-const SHARE_VERSION = 'daily-v1';
+type RuntimeProfileFields = {
+  displayName?: string | null;
+  handle?: string | null;
+  pfpUrl?: string | null;
+  imageUrl?: string | null;
+  avatarUrl?: string | null;
+  user?: {
+    displayName?: string | null;
+    username?: string | null;
+    handle?: string | null;
+    pfpUrl?: string | null;
+    imageUrl?: string | null;
+    avatarUrl?: string | null;
+  } | null;
+  context?: {
+    user?: {
+      displayName?: string | null;
+      username?: string | null;
+      handle?: string | null;
+      pfpUrl?: string | null;
+      imageUrl?: string | null;
+      avatarUrl?: string | null;
+    } | null;
+  } | null;
+};
+
+const SHARE_VERSION = 'daily-v2';
+
+function getBoundQuickAuthFetch() {
+  const quickAuth = (sdk as QuickAuthSdk).quickAuth;
+
+  if (!quickAuth?.fetch) {
+    return null;
+  }
+
+  /*
+    Do not destructure sdk.quickAuth.fetch directly.
+    In Farcaster mobile it needs its internal `this` binding.
+  */
+  return quickAuth.fetch.bind(quickAuth);
+}
 
 function getShareUrl() {
   const url = new URL(window.location.origin);
@@ -53,6 +93,42 @@ function getPlaceholderRite(): DailyRite {
   };
 }
 
+function getMiniAppProfile(runtime: RuntimeProfileFields) {
+  const user = runtime.user ?? runtime.context?.user ?? null;
+
+  const displayName =
+    runtime.displayName ??
+    user?.displayName ??
+    runtime.handle ??
+    user?.username ??
+    user?.handle ??
+    'Pond Visitor';
+
+  const handle = runtime.handle ?? user?.username ?? user?.handle ?? null;
+
+  const pfpUrl =
+    runtime.pfpUrl ??
+    runtime.imageUrl ??
+    runtime.avatarUrl ??
+    user?.pfpUrl ??
+    user?.imageUrl ??
+    user?.avatarUrl ??
+    null;
+
+  return {
+    displayName,
+    handle,
+    pfpUrl,
+  };
+}
+
+function getRiteSymbolClass(rite: DailyRite) {
+  if (rite.key === 'still-water') return 'is-red-triangle';
+  if (rite.icon === '△') return 'is-red-triangle';
+
+  return '';
+}
+
 export function DailyPondRite() {
   const miniApp = useMiniAppRuntime();
 
@@ -61,19 +137,32 @@ export function DailyPondRite() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const quickAuthFetch = (sdk as QuickAuthSdk).quickAuth?.fetch;
+  const quickAuthFetch = getBoundQuickAuthFetch();
+
+  const profile = useMemo(
+    () => getMiniAppProfile(miniApp as RuntimeProfileFields),
+    [miniApp],
+  );
 
   const rite = data?.rite ?? getPlaceholderRite();
   const canPersist = Boolean(miniApp.isMiniApp && quickAuthFetch);
   const shareText = data?.shareText ?? null;
 
   const statusCopy = useMemo(() => {
-    if (!canPersist) {
+    if (!miniApp.isMiniApp) {
       return 'Open this inside Farcaster to save streaks by FID.';
     }
 
-    if (!data) {
+    if (!quickAuthFetch) {
+      return 'Farcaster is open, but Quick Auth is not ready yet.';
+    }
+
+    if (isLoading) {
       return 'Reading the pond…';
+    }
+
+    if (!data) {
+      return 'Tap refresh or complete the rite to wake today’s pond record.';
     }
 
     if (data.completedToday) {
@@ -81,10 +170,12 @@ export function DailyPondRite() {
     }
 
     return 'Complete today’s rite to extend your streak.';
-  }, [canPersist, data]);
+  }, [data, isLoading, miniApp.isMiniApp, quickAuthFetch]);
 
   const fetchDailyRite = useCallback(async () => {
-    if (!quickAuthFetch || !miniApp.isMiniApp) {
+    const authFetch = getBoundQuickAuthFetch();
+
+    if (!authFetch || !miniApp.isMiniApp) {
       setData(null);
       return;
     }
@@ -93,8 +184,7 @@ export function DailyPondRite() {
     setNotice(null);
 
     try {
-      const response = await quickAuthFetch('/api/tobyworld/daily-rite');
-
+      const response = await authFetch('/api/tobyworld/daily-rite');
       const nextData = (await response.json()) as DailyRiteResponse;
 
       if (!response.ok) {
@@ -103,18 +193,24 @@ export function DailyPondRite() {
 
       setData(nextData);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The pond could not read today’s rite.');
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'The pond could not read today’s rite.',
+      );
     } finally {
       setIsLoading(false);
     }
-  }, [miniApp.isMiniApp, quickAuthFetch]);
+  }, [miniApp.isMiniApp]);
 
   useEffect(() => {
     void fetchDailyRite();
   }, [fetchDailyRite]);
 
   async function completeRite() {
-    if (!quickAuthFetch || !miniApp.isMiniApp) {
+    const authFetch = getBoundQuickAuthFetch();
+
+    if (!authFetch || !miniApp.isMiniApp) {
       setNotice('Open this inside Farcaster to complete the persistent daily rite.');
       return;
     }
@@ -123,7 +219,7 @@ export function DailyPondRite() {
     setNotice(null);
 
     try {
-      const response = await quickAuthFetch('/api/tobyworld/daily-rite', {
+      const response = await authFetch('/api/tobyworld/daily-rite', {
         method: 'POST',
       });
 
@@ -199,14 +295,24 @@ export function DailyPondRite() {
           <span>{statusCopy}</span>
         </div>
 
-        <div className="daily-pond-date">
-          <strong>{data?.today ?? 'Today'}</strong>
-          <small>{canPersist ? 'FID saved' : 'Farcaster needed'}</small>
+        <div className="daily-pond-user-card">
+          <div className="daily-pond-pfp">
+            {profile.pfpUrl ? (
+              <img src={profile.pfpUrl} alt="" aria-hidden="true" />
+            ) : (
+              <span>🐸</span>
+            )}
+          </div>
+
+          <div>
+            <strong>{profile.displayName}</strong>
+            <small>{profile.handle ? `@${profile.handle}` : canPersist ? 'FID saved' : 'Farcaster needed'}</small>
+          </div>
         </div>
       </header>
 
       <div className="daily-pond-card">
-        <div className="daily-pond-symbol">
+        <div className={`daily-pond-symbol ${getRiteSymbolClass(rite)}`}>
           <span>{rite.icon}</span>
         </div>
 
