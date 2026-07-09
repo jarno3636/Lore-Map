@@ -16,6 +16,13 @@ export type WalletSupportPayload = {
   message: string;
 };
 
+type TobyworldSupportAsset = (typeof TOBYWORLD_SWAP_TOKENS)[number];
+
+export type HeldTobyworldSupportAsset = {
+  id: TobyworldSupportAsset['id'];
+  symbol: TobyworldSupportAsset['symbol'];
+};
+
 const ERC20_BALANCE_ABI = [
   {
     type: 'function',
@@ -66,7 +73,9 @@ export function buildWalletSupportMessage({
   ].join('\n');
 }
 
-async function getHeldTobyworldAssets(walletAddress: Address) {
+async function getHeldTobyworldAssets(
+  walletAddress: Address,
+): Promise<HeldTobyworldSupportAsset[]> {
   const results = await Promise.allSettled(
     TOBYWORLD_SWAP_TOKENS.map(async (token) => {
       const balance = await baseClient.readContract({
@@ -77,24 +86,23 @@ async function getHeldTobyworldAssets(walletAddress: Address) {
       });
 
       return {
-        id: token.id,
-        symbol: token.symbol,
+        token,
         balance,
       };
     }),
   );
 
   return results
-    .map((result) => {
+    .map((result): HeldTobyworldSupportAsset | null => {
       if (result.status !== 'fulfilled') return null;
       if (result.value.balance <= BigInt(0)) return null;
 
       return {
-        id: result.value.id,
-        symbol: result.value.symbol,
+        id: result.value.token.id,
+        symbol: result.value.token.symbol,
       };
     })
-    .filter((asset): asset is { id: string; symbol: string } => Boolean(asset));
+    .filter((asset): asset is HeldTobyworldSupportAsset => asset !== null);
 }
 
 export async function verifyWalletSupportPayload({
@@ -108,6 +116,7 @@ export async function verifyWalletSupportPayload({
     return {
       ok: false as const,
       error: 'Invalid wallet address.',
+      heldAssets: [] as HeldTobyworldSupportAsset[],
     };
   }
 
@@ -122,6 +131,7 @@ export async function verifyWalletSupportPayload({
     return {
       ok: false as const,
       error: 'The signed message does not match today’s pond rite.',
+      heldAssets: [] as HeldTobyworldSupportAsset[],
     };
   }
 
@@ -135,6 +145,7 @@ export async function verifyWalletSupportPayload({
     return {
       ok: false as const,
       error: 'Wallet signature could not be verified.',
+      heldAssets: [] as HeldTobyworldSupportAsset[],
     };
   }
 
