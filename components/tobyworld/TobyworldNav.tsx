@@ -4,13 +4,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
+type NavAccent = 'pond' | 'red' | 'green' | 'blue' | 'gold' | 'relic' | 'swap';
+
 type NavItem = {
   label: string;
   href: string;
   symbol: string;
   matchPath: string;
   matchHash?: string;
-  accent: 'pond' | 'red' | 'green' | 'blue' | 'gold' | 'relic';
+  accent: NavAccent;
 };
 
 const navItems: NavItem[] = [
@@ -20,6 +22,14 @@ const navItems: NavItem[] = [
     matchPath: '/',
     symbol: '🐸',
     accent: 'pond',
+  },
+  {
+    label: 'Swap',
+    href: '/#swap-gateway',
+    matchPath: '/',
+    matchHash: 'swap-gateway',
+    symbol: '⇄',
+    accent: 'swap',
   },
   {
     label: 'Rite',
@@ -85,13 +95,23 @@ export function TobyworldNav() {
     syncScroll();
 
     window.addEventListener('hashchange', syncHash);
+    window.addEventListener('popstate', syncHash);
     window.addEventListener('scroll', syncScroll, { passive: true });
 
     return () => {
       window.removeEventListener('hashchange', syncHash);
+      window.removeEventListener('popstate', syncHash);
       window.removeEventListener('scroll', syncScroll);
     };
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setHash(getCurrentHash());
+    }, 40);
+
+    return () => window.clearTimeout(timeout);
+  }, [pathname]);
 
   const activeLabel = useMemo(() => {
     const active = navItems.find((item) => {
@@ -127,14 +147,23 @@ export function TobyworldNav() {
         <div className="toby-nav-links" aria-label="Primary Tobyworld links">
           {navItems.map((item) => {
             const isHashItem = Boolean(item.matchHash);
-            const isActive =
+
+            const isHashActive =
               item.matchPath === pathname &&
-              (isHashItem ? hash === item.matchHash : !item.matchHash && !hash);
+              isHashItem &&
+              hash === item.matchHash;
+
+            const isRootActive =
+              item.matchPath === '/' &&
+              item.href === '/' &&
+              pathname === '/' &&
+              !hash;
 
             const isPageActive =
-              item.matchPath !== '/' && pathname === item.matchPath;
+              item.matchPath !== '/' &&
+              pathname === item.matchPath;
 
-            const active = isActive || isPageActive;
+            const active = isHashActive || isRootActive || isPageActive;
 
             return (
               <Link
@@ -142,6 +171,11 @@ export function TobyworldNav() {
                 className={`toby-nav-link accent-${item.accent} ${active ? 'is-active' : ''}`}
                 key={item.href}
                 aria-current={active ? 'page' : undefined}
+                onClick={() => {
+                  window.setTimeout(() => {
+                    setHash(getCurrentHash());
+                  }, 40);
+                }}
               >
                 <span className="toby-nav-symbol">{item.symbol}</span>
                 <b>{item.label}</b>
