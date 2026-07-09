@@ -439,3 +439,38 @@
     opacity: 0.55;
   }
 }
+.milestone-multiplier-strip {
+  display: grid;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.milestone-multiplier-strip span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(249, 201, 104, 0.13);
+  border-radius: 15px;
+  padding: 10px 11px;
+  color: #a8c5cc;
+  background: rgba(35, 28, 18, 0.42);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.milestone-multiplier-strip b {
+  color: #fff8e6;
+  font-size: 14px;
+}
+
+@media (min-width: 640px) {
+  .milestone-multiplier-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .milestone-multiplier-strip span {
+    display: grid;
+    justify-content: stretch;
+  }
+}
