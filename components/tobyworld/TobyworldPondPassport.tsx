@@ -110,6 +110,7 @@ const ERC20_BALANCE_ABI = [
 
 const BASE_CHAIN_ID = 8453 as const;
 const REQUIRED_ASSET_COUNT = 2;
+const TOTAL_ASSET_COUNT = 3;
 
 const PASSPORT_FROG_BACKUPS = [
   '/images/passport/frog-lily-agent.png',
@@ -150,9 +151,18 @@ const WALLET_WARNINGS = [
   'No gas was spent, but dignity may have been lightly stamped.',
 ];
 
-function getOrigin() {
-  if (typeof window === 'undefined') return 'https://toby-atlas.vercel.app';
-  return window.location.origin;
+function getPublicOrigin() {
+  const envOrigin = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  if (envOrigin) {
+    return envOrigin.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return 'https://toby-atlas.vercel.app';
 }
 
 function getBoundQuickAuthFetch() {
@@ -213,10 +223,10 @@ function getIssuedDate(value?: string) {
   });
 }
 
-function getSourceLabel(source?: string) {
+function getSourceLabel(source?: string, isFarcasterUser = false) {
   if (!source) return 'Not loaded';
   if (source === 'gemini') return 'AI stamp';
-  if (source === 'wallet') return 'Wallet stamp';
+  if (source === 'wallet') return isFarcasterUser ? 'Pond stamp' : 'Wallet stamp';
   if (source.startsWith('fallback')) return 'Local stamp';
 
   return 'Pond stamp';
@@ -276,7 +286,7 @@ function createWalletSupporterPersona(address: string, heldAssets: TobyworldAsse
     strangeHabit,
     pondWarning,
     stamp,
-    shareText: `My Tobyworld Web Supporter Passport has been stamped: ${title}. Held path: ${heldSymbols}. The pond remains professionally concerned. ${stamp}`,
+    shareText: `My Tobyworld Pond Passport has been stamped: ${title}. Held path: ${heldSymbols}. The pond remains professionally concerned. ${stamp}`,
   };
 }
 
@@ -285,7 +295,7 @@ function createWalletSupporterSnapshot(address: string): PassportSnapshot {
     fid: 0,
     username: null,
     displayName: `Wallet ${shortenAddress(address)}`,
-    currentMark: 'Web Supporter',
+    currentMark: 'Wallet Supporter',
     streakCount: 1,
     bestStreak: 1,
     totalCompletions: 1,
@@ -304,6 +314,7 @@ function getPassportStateLabel({
   data,
   hasEnoughAssets,
   assetCount,
+  isFarcasterUser,
 }: {
   isConnected: boolean;
   isCheckingAssets: boolean;
@@ -312,6 +323,7 @@ function getPassportStateLabel({
   data: PassportResponse | null;
   hasEnoughAssets: boolean;
   assetCount: number;
+  isFarcasterUser: boolean;
 }) {
   if (!isConnected) return 'Wallet needed';
   if (isCheckingAssets) return 'Checking wallet assets…';
@@ -325,9 +337,11 @@ function getPassportStateLabel({
   if (data?.persona) {
     const rerolls = data.source === 'wallet' ? 0 : data.limits?.rerollsRemaining ?? 0;
 
-    return data.source === 'wallet'
-      ? 'Loaded · Web supporter stamp'
-      : `Loaded · ${rerolls} reroll${rerolls === 1 ? '' : 's'} left`;
+    if (data.source === 'wallet') {
+      return isFarcasterUser ? 'Loaded · Pond stamp' : 'Loaded · Wallet supporter stamp';
+    }
+
+    return `Loaded · ${rerolls} reroll${rerolls === 1 ? '' : 's'} left`;
   }
 
   return 'Ready for pond stamp';
@@ -348,6 +362,16 @@ function pickBackupFrogImage(seed: string | number | undefined) {
   return PASSPORT_FROG_BACKUPS[Math.abs(hash) % PASSPORT_FROG_BACKUPS.length];
 }
 
+function getSafePhotoUrl(photoSrc?: string) {
+  if (!photoSrc) return undefined;
+
+  try {
+    return new URL(photoSrc, getPublicOrigin()).toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function getPassportImageUrl({
   persona,
   snapshot,
@@ -356,6 +380,7 @@ function getPassportImageUrl({
   photoSrc,
   heldAssets,
   source,
+  isFarcasterUser,
 }: {
   persona: PondPersona;
   snapshot?: PassportSnapshot;
@@ -364,23 +389,32 @@ function getPassportImageUrl({
   photoSrc?: string;
   heldAssets: TobyworldAsset[];
   source?: string;
+  isFarcasterUser: boolean;
 }) {
-  const url = new URL('/api/tobyworld/passport-image', getOrigin());
+  const url = new URL('/api/tobyworld/passport-image', getPublicOrigin());
+
+  const mark =
+    isFarcasterUser && snapshot?.currentMark === 'Web Supporter'
+      ? 'Pond Supporter'
+      : snapshot?.currentMark ?? 'Unstamped Frog';
 
   url.searchParams.set('title', persona.title);
   url.searchParams.set('characteristic', persona.characteristic);
   url.searchParams.set('name', getDisplayName(snapshot, contextUser, address));
   url.searchParams.set('handle', getHandle(snapshot, contextUser, address));
-  url.searchParams.set('mark', snapshot?.currentMark ?? 'Unstamped Frog');
+  url.searchParams.set('mark', mark);
   url.searchParams.set('streak', `${formatNumber(snapshot?.streakCount)}d`);
   url.searchParams.set('rites', formatNumber(snapshot?.totalCompletions));
   url.searchParams.set('power', `${formatNumber(snapshot?.currentEchoPower)}x`);
-  url.searchParams.set('assets', `${heldAssets.length}/3`);
+  url.searchParams.set('assets', `${heldAssets.length}/${TOTAL_ASSET_COUNT}`);
   url.searchParams.set('stamp', persona.stamp);
-  url.searchParams.set('mode', source === 'wallet' ? 'WEB SUPPORTER' : 'APPROVED');
+  url.searchParams.set('mode', source === 'wallet' && !isFarcasterUser ? 'WALLET SUPPORTER' : 'APPROVED');
+  url.searchParams.set('v', String(Date.now()));
 
-  if (photoSrc) {
-    url.searchParams.set('photo', photoSrc);
+  const safePhoto = getSafePhotoUrl(photoSrc);
+
+  if (safePhoto) {
+    url.searchParams.set('photo', safePhoto);
   }
 
   return url.toString();
@@ -393,6 +427,7 @@ function getDynamicPassportCastText({
   address,
   heldAssets,
   source,
+  isFarcasterUser,
 }: {
   persona: PondPersona;
   snapshot?: PassportSnapshot;
@@ -400,6 +435,7 @@ function getDynamicPassportCastText({
   address?: string;
   heldAssets: TobyworldAsset[];
   source?: string;
+  isFarcasterUser: boolean;
 }) {
   const name = getDisplayName(snapshot, contextUser, address);
   const handle = getHandle(snapshot, contextUser, address);
@@ -407,8 +443,8 @@ function getDynamicPassportCastText({
     heldAssets.length > 0 ? heldAssets.map((asset) => asset.symbol).join(' + ') : 'pond path';
 
   const stats =
-    source === 'wallet'
-      ? `Web Supporter · ${heldPath}`
+    source === 'wallet' && !isFarcasterUser
+      ? `Wallet Supporter · ${heldPath}`
       : `${formatNumber(snapshot?.streakCount)}d streak · ${formatNumber(
           snapshot?.currentEchoPower,
         )}x echo power`;
@@ -470,6 +506,7 @@ export function TobyworldPondPassport() {
   const persona = data?.persona;
   const snapshot = data?.snapshot;
   const hasQuickAuth = Boolean(getBoundQuickAuthFetch());
+  const isFarcasterUser = Boolean(contextUser?.fid || snapshot?.fid || hasQuickAuth);
 
   const fallbackFrogImage = pickBackupFrogImage(snapshot?.fid || address);
   const pfpUrl = !pfpFailed ? contextUser?.pfpUrl : undefined;
@@ -509,6 +546,7 @@ export function TobyworldPondPassport() {
     data,
     hasEnoughAssets,
     assetCount,
+    isFarcasterUser,
   });
 
   const checkWalletAssets = useCallback(async () => {
@@ -605,7 +643,7 @@ export function TobyworldPondPassport() {
 
       if (!authFetch) {
         setNotice(
-          'Wallet gate passed. Press Support Rite to sign a free message and receive a Web Supporter Passport. No gas, no transaction, no token approval.',
+          'Wallet gate passed. Press Support Rite to sign a free message and receive a Wallet Supporter Passport. No gas, no transaction, no token approval.',
         );
         return;
       }
@@ -621,11 +659,12 @@ export function TobyworldPondPassport() {
       }
 
       try {
-        const response = await authFetch(`${getOrigin()}/api/tobyworld/pond-passport`, {
+        const response = await authFetch(`${getPublicOrigin()}/api/tobyworld/pond-passport`, {
           method: reroll ? 'POST' : 'GET',
           headers: {
             'Content-Type': 'application/json',
           },
+          cache: 'no-store',
         });
 
         const nextData = (await response.json()) as PassportResponse;
@@ -689,6 +728,11 @@ export function TobyworldPondPassport() {
   }, [canUsePassport, data?.persona, fetchPassport, hasQuickAuth]);
 
   async function supportRiteWithWallet() {
+    if (isFarcasterUser) {
+      setNotice('Farcaster passports use your Farcaster rite activity, not Web Supporter mode.');
+      return;
+    }
+
     if (!address) {
       connectWallet();
       return;
@@ -713,6 +757,7 @@ export function TobyworldPondPassport() {
         headers: {
           'Content-Type': 'application/json',
         },
+        cache: 'no-store',
         body: JSON.stringify({
           walletAddress: address,
           message,
@@ -742,10 +787,7 @@ export function TobyworldPondPassport() {
       });
 
       setFreshInkKey((value) => value + 1);
-      setNotice(
-        result.message ||
-          'The wallet has supported today’s pond rite. Web Supporter Passport stamped.',
-      );
+      setNotice(result.message || 'The wallet has supported today’s pond rite. Passport stamped.');
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The wallet stamp failed.');
     } finally {
@@ -753,10 +795,10 @@ export function TobyworldPondPassport() {
     }
   }
 
-  async function sharePassport() {
-    if (!persona) return;
+  function buildImageUrl() {
+    if (!persona) return null;
 
-    const imageUrl = getPassportImageUrl({
+    return getPassportImageUrl({
       persona,
       snapshot,
       contextUser,
@@ -764,17 +806,31 @@ export function TobyworldPondPassport() {
       photoSrc,
       heldAssets,
       source: data?.source,
+      isFarcasterUser,
     });
+  }
 
-    const text = getDynamicPassportCastText({
+  function buildCastText() {
+    if (!persona) return '';
+
+    return getDynamicPassportCastText({
       persona,
       snapshot,
       contextUser,
       address,
       heldAssets,
       source: data?.source,
+      isFarcasterUser,
     });
+  }
 
+  async function sharePassport() {
+    if (!persona) return;
+
+    const imageUrl = buildImageUrl();
+    if (!imageUrl) return;
+
+    const text = buildCastText();
     const composeCast = (sdk as PassportSdk).actions?.composeCast;
 
     try {
@@ -790,8 +846,12 @@ export function TobyworldPondPassport() {
         return;
       }
 
-      const copied = await copyText(`${text}\n\n${imageUrl}`);
-      setNotice(copied ? 'Passport cast text and image link copied.' : text);
+      const warpcastUrl = new URL('https://warpcast.com/~/compose');
+      warpcastUrl.searchParams.set('text', text);
+      warpcastUrl.searchParams.append('embeds[]', imageUrl);
+
+      await openExternalUrl(warpcastUrl.toString());
+      setNotice('Cast composer opened.');
     } catch {
       const copied = await copyText(`${text}\n\n${imageUrl}`);
       setNotice(copied ? 'Passport cast text and image link copied.' : text);
@@ -801,24 +861,10 @@ export function TobyworldPondPassport() {
   async function shareToX() {
     if (!persona) return;
 
-    const imageUrl = getPassportImageUrl({
-      persona,
-      snapshot,
-      contextUser,
-      address,
-      photoSrc,
-      heldAssets,
-      source: data?.source,
-    });
+    const imageUrl = buildImageUrl();
+    if (!imageUrl) return;
 
-    const text = getDynamicPassportCastText({
-      persona,
-      snapshot,
-      contextUser,
-      address,
-      heldAssets,
-      source: data?.source,
-    });
+    const text = buildCastText();
 
     const url = new URL('https://twitter.com/intent/tweet');
     url.searchParams.set('text', text);
@@ -830,24 +876,10 @@ export function TobyworldPondPassport() {
   async function copyPassport() {
     if (!persona) return;
 
-    const imageUrl = getPassportImageUrl({
-      persona,
-      snapshot,
-      contextUser,
-      address,
-      photoSrc,
-      heldAssets,
-      source: data?.source,
-    });
+    const imageUrl = buildImageUrl();
+    if (!imageUrl) return;
 
-    const text = getDynamicPassportCastText({
-      persona,
-      snapshot,
-      contextUser,
-      address,
-      heldAssets,
-      source: data?.source,
-    });
+    const text = buildCastText();
 
     const copied = await copyText(`${text}\n\n${imageUrl}`);
     setNotice(copied ? 'Passport text and image link copied.' : persona.shareText);
@@ -860,23 +892,27 @@ export function TobyworldPondPassport() {
       setIsCreatingImage(true);
       setNotice(null);
 
-      const imageUrl = getPassportImageUrl({
-        persona,
-        snapshot,
-        contextUser,
-        address,
-        photoSrc,
-        heldAssets,
-        source: data?.source,
-      });
+      const imageUrl = buildImageUrl();
 
-      const response = await fetch(imageUrl);
+      if (!imageUrl) {
+        throw new Error('Unable to build passport image URL.');
+      }
+
+      const response = await fetch(imageUrl, {
+        method: 'GET',
+        cache: 'no-store',
+      });
 
       if (!response.ok) {
         throw new Error('Unable to render passport image.');
       }
 
       const blob = await response.blob();
+
+      if (!blob.type.includes('image')) {
+        throw new Error('Passport image route did not return an image.');
+      }
+
       const file = new File([blob], 'tobyworld-pond-passport.png', {
         type: 'image/png',
       });
@@ -886,14 +922,7 @@ export function TobyworldPondPassport() {
       if (shareNavigator.canShare?.({ files: [file] }) && shareNavigator.share) {
         await shareNavigator.share({
           title: 'Tobyworld Pond Passport',
-          text: getDynamicPassportCastText({
-            persona,
-            snapshot,
-            contextUser,
-            address,
-            heldAssets,
-            source: data?.source,
-          }),
+          text: buildCastText(),
           files: [file],
         });
 
@@ -902,23 +931,40 @@ export function TobyworldPondPassport() {
       }
 
       const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
 
-      link.href = objectUrl;
-      link.download = 'tobyworld-pond-passport.png';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const popup = window.open(objectUrl, '_blank', 'noopener,noreferrer');
 
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      if (!popup) {
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = 'tobyworld-pond-passport.png';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
 
-      setNotice('Passport image downloaded.');
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+
+      setNotice('Passport image opened. Long-press or save from the browser menu.');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Unable to create passport image.');
+      const imageUrl = buildImageUrl();
+      const copied = imageUrl ? await copyText(imageUrl) : false;
+
+      setNotice(
+        error instanceof Error
+          ? `${error.message}${copied ? ' Image link copied instead.' : ''}`
+          : 'Unable to create passport image.',
+      );
     } finally {
       setIsCreatingImage(false);
     }
   }
+
+  const renderedMark =
+    isFarcasterUser && snapshot?.currentMark === 'Web Supporter'
+      ? 'Pond Supporter'
+      : snapshot?.currentMark ?? 'Unstamped Frog';
 
   return (
     <section className="pond-passport" aria-label="Tobyworld Pond Passport">
@@ -931,7 +977,7 @@ export function TobyworldPondPassport() {
         </div>
 
         <div className="pond-passport-toolbar-chip">
-          <strong>{getSourceLabel(data?.source)}</strong>
+          <strong>{getSourceLabel(data?.source, isFarcasterUser)}</strong>
           <small>{getIssuedDate(data?.generatedOn)}</small>
         </div>
       </div>
@@ -979,12 +1025,12 @@ export function TobyworldPondPassport() {
         </div>
       )}
 
-      {isConnected && hasEnoughAssets && !persona && !hasQuickAuth && (
+      {isConnected && hasEnoughAssets && !persona && !hasQuickAuth && !isFarcasterUser && (
         <div className="pond-passport-gate">
           <strong>Wallet supporter mode.</strong>
           <p>
             This wallet passed the two-asset gate. Press Support Rite to sign a free
-            message, add one echo to the community rite, and stamp a Web Supporter
+            message, add one echo to the community rite, and stamp a Wallet Supporter
             Passport. No gas. No transaction. No token approval.
           </p>
 
@@ -1081,7 +1127,7 @@ export function TobyworldPondPassport() {
         <div className="pond-passport-bottom-row">
           <div>
             <small>MARK</small>
-            <strong>{snapshot?.currentMark ?? 'Unstamped Frog'}</strong>
+            <strong>{renderedMark}</strong>
           </div>
 
           <div className="pond-passport-approved">
@@ -1112,7 +1158,7 @@ export function TobyworldPondPassport() {
           >
             {isRerolling ? 'Rerolling…' : 'Reroll'}
           </button>
-        ) : (
+        ) : !isFarcasterUser ? (
           <button
             type="button"
             className="primary"
@@ -1121,23 +1167,27 @@ export function TobyworldPondPassport() {
           >
             {isSupporting || isSigning ? 'Signing…' : persona ? 'Support Again' : 'Support Rite'}
           </button>
-        )}
+        ) : null}
 
-        <button
-          type="button"
-          onClick={() => void supportRiteWithWallet()}
-          disabled={!isConnected || !hasEnoughAssets || isSupporting || isSigning}
-        >
-          {isSupporting || isSigning ? 'Signing…' : 'Support'}
-        </button>
+        {!isFarcasterUser && (
+          <button
+            type="button"
+            onClick={() => void supportRiteWithWallet()}
+            disabled={!isConnected || !hasEnoughAssets || isSupporting || isSigning}
+          >
+            {isSupporting || isSigning ? 'Signing…' : 'Support'}
+          </button>
+        )}
 
         <button type="button" onClick={() => void sharePassport()} disabled={!persona}>
           Cast
         </button>
 
-        <button type="button" onClick={() => void shareToX()} disabled={!persona}>
-          X
-        </button>
+        {!isFarcasterUser && (
+          <button type="button" onClick={() => void shareToX()} disabled={!persona}>
+            X
+          </button>
+        )}
 
         <button
           type="button"
