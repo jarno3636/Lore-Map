@@ -1,13 +1,11 @@
+// app/api/tobyworld/passport-image/route.tsx
+
 import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 
-function cleanParam(
-  url: URL,
-  key: string,
-  fallback: string,
-  maxLength = 120,
-) {
+function cleanParam(url: URL, key: string, fallback: string, maxLength = 120) {
   const value = url.searchParams.get(key)?.trim().replace(/\s+/g, ' ');
 
   if (!value) return fallback;
@@ -20,15 +18,17 @@ function getPhotoUrl(requestUrl: URL) {
 
   if (!rawPhoto) return '';
 
-  if (rawPhoto.startsWith('http://') || rawPhoto.startsWith('https://')) {
-    return rawPhoto;
-  }
+  try {
+    const photoUrl = new URL(rawPhoto, requestUrl.origin);
 
-  if (rawPhoto.startsWith('/')) {
-    return `${requestUrl.origin}${rawPhoto}`;
-  }
+    if (photoUrl.protocol !== 'https:' && photoUrl.protocol !== 'http:') {
+      return '';
+    }
 
-  return '';
+    return photoUrl.toString();
+  } catch {
+    return '';
+  }
 }
 
 export async function GET(request: Request) {
@@ -354,6 +354,10 @@ export async function GET(request: Request) {
     {
       width: 1200,
       height: 630,
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=300',
+      },
     },
   );
 }
