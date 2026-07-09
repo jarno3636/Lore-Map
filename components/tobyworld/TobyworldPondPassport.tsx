@@ -6,7 +6,7 @@ import {
   useAccount,
   useConnect,
   useDisconnect,
-  useReadContracts,
+  usePublicClient,
   useSignMessage,
 } from 'wagmi';
 import { TOBYWORLD_SWAP_TOKENS } from '@/lib/tobyworld-swap-tokens';
@@ -78,6 +78,10 @@ type WalletSupportResponse = {
   error?: string;
   message?: string;
   alreadySupportedToday?: boolean;
+  heldAssets?: Array<{
+    id: string;
+    symbol: string;
+  }>;
 };
 
 type TobyworldAsset = (typeof TOBYWORLD_SWAP_TOKENS)[number];
@@ -106,14 +110,6 @@ const ERC20_BALANCE_ABI = [
 
 const BASE_CHAIN_ID = 8453 as const;
 const REQUIRED_ASSET_COUNT = 2;
-
-type AssetReadContract = {
-  address: `0x${string}`;
-  abi: typeof ERC20_BALANCE_ABI;
-  functionName: 'balanceOf';
-  args: readonly [`0x${string}`];
-  chainId: typeof BASE_CHAIN_ID;
-};
 
 const PASSPORT_FROG_BACKUPS = [
   '/images/passport/frog-lily-agent.png',
@@ -260,7 +256,9 @@ function pick<T>(items: readonly T[], seed: number) {
 }
 
 function createWalletSupporterPersona(address: string, heldAssets: TobyworldAsset[]): PondPersona {
-  const heldSymbols = heldAssets.map((asset) => asset.symbol).join(' + ');
+  const heldSymbols =
+    heldAssets.length > 0 ? heldAssets.map((asset) => asset.symbol).join(' + ') : 'Pond Assets';
+
   const seed = hashText(`${address}:${heldSymbols}:${getTodayUtcDate()}`);
 
   const title = pick(WALLET_TITLES, seed);
@@ -326,6 +324,7 @@ function getPassportStateLabel({
 
   if (data?.persona) {
     const rerolls = data.source === 'wallet' ? 0 : data.limits?.rerollsRemaining ?? 0;
+
     return data.source === 'wallet'
       ? 'Loaded · Web supporter stamp'
       : `Loaded · ${rerolls} reroll${rerolls === 1 ? '' : 's'} left`;
@@ -464,15 +463,8 @@ function wrapText({
   }
 
   lines.forEach((currentLine, index) => {
-    const finalLine =
-      index === maxLines - 1 && words.join(' ').length > lines.join(' ').length
-        ? `${currentLine.replace(/[.,;:]?$/, '')}…`
-        : currentLine;
-
-    context.fillText(finalLine, x, y + index * lineHeight);
+    context.fillText(currentLine, x, y + index * lineHeight);
   });
-
-  return y + lines.length * lineHeight;
 }
 
 function loadCanvasImage(src: string) {
@@ -538,12 +530,6 @@ async function createPassportImageBlob({
   context.fillStyle = glowBlue;
   context.fillRect(0, 0, 1200, 630);
 
-  const glowGold = context.createRadialGradient(980, 70, 10, 980, 70, 420);
-  glowGold.addColorStop(0, 'rgba(248, 215, 125, 0.35)');
-  glowGold.addColorStop(1, 'rgba(248, 215, 125, 0)');
-  context.fillStyle = glowGold;
-  context.fillRect(0, 0, 1200, 630);
-
   const card = context.createLinearGradient(92, 72, 1108, 558);
   card.addColorStop(0, '#fff8e6');
   card.addColorStop(1, '#e8cf99');
@@ -560,9 +546,7 @@ async function createPassportImageBlob({
 
   context.fillStyle = '#7b3f23';
   context.font = '900 24px Arial, sans-serif';
-  context.letterSpacing = '4px';
   context.fillText('TOBYWORLD POND PASSPORT', 132, 126);
-  context.letterSpacing = '0px';
 
   context.fillStyle = '#2f1f15';
   context.font = '900 58px Georgia, serif';
@@ -580,17 +564,15 @@ async function createPassportImageBlob({
   strokeRoundedRect(context, photoX, photoY, photoSize, photoSize, 34, 'rgba(91, 53, 26, 0.32)', 3);
 
   try {
-    if (photoSrc) {
-      const image = await loadCanvasImage(photoSrc);
+    if (!photoSrc) throw new Error('No photo source.');
 
-      context.save();
-      drawRoundedRect(context, photoX + 8, photoY + 8, photoSize - 16, photoSize - 16, 28);
-      context.clip();
-      context.drawImage(image, photoX + 8, photoY + 8, photoSize - 16, photoSize - 16);
-      context.restore();
-    } else {
-      throw new Error('No photo source.');
-    }
+    const image = await loadCanvasImage(photoSrc);
+
+    context.save();
+    drawRoundedRect(context, photoX + 8, photoY + 8, photoSize - 16, photoSize - 16, 28);
+    context.clip();
+    context.drawImage(image, photoX + 8, photoY + 8, photoSize - 16, photoSize - 16);
+    context.restore();
   } catch {
     context.fillStyle = '#2f1f15';
     context.font = '92px Arial, sans-serif';
@@ -672,6 +654,8 @@ async function createPassportImageBlob({
 export function TobyworldPondPassport() {
   const [data, setData] = useState<PassportResponse | null>(null);
   const [contextUser, setContextUser] = useState<MiniAppUserContext | null>(null);
+  const [heldAssets, setHeldAssets] = useState<TobyworldAsset[]>([]);
+  const [isCheckingAssets, setIsCheckingAssets] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRerolling, setIsRerolling] = useState(false);
   const [isSupporting, setIsSupporting] = useState(false);
@@ -685,51 +669,15 @@ export function TobyworldPondPassport() {
   const { connectors, connect, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
+  const publicClient = usePublicClient({ chainId: BASE_CHAIN_ID });
 
   const persona = data?.persona;
   const snapshot = data?.snapshot;
+  const hasQuickAuth = Boolean(getBoundQuickAuthFetch());
 
   const fallbackFrogImage = pickBackupFrogImage(snapshot?.fid || address);
   const pfpUrl = !pfpFailed ? contextUser?.pfpUrl : undefined;
   const photoSrc = pfpUrl || (!frogImageFailed ? fallbackFrogImage : undefined);
-
-  const assetReadContracts = useMemo<readonly AssetReadContract[]>(() => {
-    if (!isConnected || !address) return [];
-
-    return TOBYWORLD_SWAP_TOKENS.map((token) => ({
-      address: token.address,
-      abi: ERC20_BALANCE_ABI,
-      functionName: 'balanceOf',
-      args: [address] as const,
-      chainId: BASE_CHAIN_ID,
-    }));
-  }, [address, isConnected]);
-
-  const { data: assetReads, isFetching: isCheckingAssets } = useReadContracts({
-    contracts: assetReadContracts,
-    query: {
-      enabled: Boolean(isConnected && address && assetReadContracts.length > 0),
-      refetchInterval: Boolean(isConnected && address) ? 30_000 : false,
-    },
-  });
-
-  const heldAssets = useMemo(() => {
-    if (!Array.isArray(assetReads)) return [];
-
-    return assetReads
-      .map((read, index) => {
-        const token = TOBYWORLD_SWAP_TOKENS[index];
-
-        if (!token || !read || read.status !== 'success') return null;
-
-        const balance = toBigIntBalance(read.result);
-
-        if (balance <= BigInt(0)) return null;
-
-        return token;
-      })
-      .filter((token): token is TobyworldAsset => Boolean(token));
-  }, [assetReads]);
 
   const assetCount = heldAssets.length;
   const hasEnoughAssets = assetCount >= REQUIRED_ASSET_COUNT;
@@ -766,6 +714,52 @@ export function TobyworldPondPassport() {
     hasEnoughAssets,
     assetCount,
   });
+
+  const checkWalletAssets = useCallback(async () => {
+    if (!isConnected || !address || !publicClient) {
+      setHeldAssets([]);
+      setIsCheckingAssets(false);
+      return;
+    }
+
+    setIsCheckingAssets(true);
+
+    try {
+      const results = await Promise.allSettled(
+        TOBYWORLD_SWAP_TOKENS.map(async (token) => {
+          const balance = await publicClient.readContract({
+            address: token.address,
+            abi: ERC20_BALANCE_ABI,
+            functionName: 'balanceOf',
+            args: [address],
+          });
+
+          return {
+            token,
+            balance,
+          };
+        }),
+      );
+
+      const nextHeldAssets = results
+        .map((result) => {
+          if (result.status !== 'fulfilled') return null;
+
+          const balance = toBigIntBalance(result.value.balance);
+
+          if (balance <= BigInt(0)) return null;
+
+          return result.value.token;
+        })
+        .filter((token): token is TobyworldAsset => Boolean(token));
+
+      setHeldAssets(nextHeldAssets);
+    } catch {
+      setHeldAssets([]);
+    } finally {
+      setIsCheckingAssets(false);
+    }
+  }, [address, isConnected, publicClient]);
 
   const loadMiniAppContext = useCallback(async () => {
     try {
@@ -815,7 +809,7 @@ export function TobyworldPondPassport() {
 
       if (!authFetch) {
         setNotice(
-          'Wallet gate passed. On web, press Support Rite to sign a free message and receive a Web Supporter Passport. No gas, no transaction, no token approval.',
+          'Wallet gate passed. Press Support Rite to sign a free message and receive a Web Supporter Passport. No gas, no transaction, no token approval.',
         );
         return;
       }
@@ -865,7 +859,14 @@ export function TobyworldPondPassport() {
         setIsRerolling(false);
       }
     },
-    [address, assetCount, connectWallet, data?.persona?.title, hasEnoughAssets, isConnected],
+    [
+      address,
+      assetCount,
+      connectWallet,
+      data?.persona?.title,
+      hasEnoughAssets,
+      isConnected,
+    ],
   );
 
   useEffect(() => {
@@ -873,10 +874,23 @@ export function TobyworldPondPassport() {
   }, [loadMiniAppContext]);
 
   useEffect(() => {
+    void checkWalletAssets();
+
+    if (!isConnected || !address) return undefined;
+
+    const interval = window.setInterval(() => {
+      void checkWalletAssets();
+    }, 30_000);
+
+    return () => window.clearInterval(interval);
+  }, [address, checkWalletAssets, isConnected]);
+
+  useEffect(() => {
+    if (!hasQuickAuth) return;
     if (!canUsePassport || data?.persona) return;
 
     void fetchPassport(false);
-  }, [canUsePassport, data?.persona, fetchPassport]);
+  }, [canUsePassport, data?.persona, fetchPassport, hasQuickAuth]);
 
   async function supportRiteWithWallet() {
     if (!address) {
@@ -1099,6 +1113,25 @@ export function TobyworldPondPassport() {
         </div>
       )}
 
+      {isConnected && hasEnoughAssets && !persona && !hasQuickAuth && (
+        <div className="pond-passport-gate">
+          <strong>Wallet supporter mode.</strong>
+          <p>
+            This wallet passed the two-asset gate. Press Support Rite to sign a free
+            message, add one echo to the community rite, and stamp a Web Supporter
+            Passport. No gas. No transaction. No token approval.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => void supportRiteWithWallet()}
+            disabled={isSupporting || isSigning}
+          >
+            {isSupporting || isSigning ? 'Signing…' : 'Support Rite + Stamp Passport'}
+          </button>
+        </div>
+      )}
+
       <article
         className={`pond-passport-card ${persona ? 'is-ready' : 'is-pending'} ${
           !hasEnoughAssets ? 'is-locked' : ''
@@ -1197,7 +1230,7 @@ export function TobyworldPondPassport() {
           <button type="button" className="primary" onClick={connectWallet} disabled={isConnecting}>
             {isConnecting ? 'Opening…' : 'Connect'}
           </button>
-        ) : (
+        ) : hasQuickAuth ? (
           <button
             type="button"
             className="primary"
@@ -1213,6 +1246,15 @@ export function TobyworldPondPassport() {
           >
             {isRerolling ? 'Rerolling…' : 'Reroll'}
           </button>
+        ) : (
+          <button
+            type="button"
+            className="primary"
+            onClick={() => void supportRiteWithWallet()}
+            disabled={!hasEnoughAssets || isSupporting || isSigning}
+          >
+            {isSupporting || isSigning ? 'Signing…' : persona ? 'Support Again' : 'Support Rite'}
+          </button>
         )}
 
         <button
@@ -1220,7 +1262,7 @@ export function TobyworldPondPassport() {
           onClick={() => void supportRiteWithWallet()}
           disabled={!isConnected || !hasEnoughAssets || isSupporting || isSigning}
         >
-          {isSupporting || isSigning ? 'Signing…' : 'Support Rite'}
+          {isSupporting || isSigning ? 'Signing…' : 'Support'}
         </button>
 
         <button type="button" onClick={() => void sharePassport()} disabled={!persona}>
@@ -1231,7 +1273,11 @@ export function TobyworldPondPassport() {
           X
         </button>
 
-        <button type="button" onClick={() => void sharePassportImage()} disabled={!persona || isCreatingImage}>
+        <button
+          type="button"
+          onClick={() => void sharePassportImage()}
+          disabled={!persona || isCreatingImage}
+        >
           {isCreatingImage ? 'Making…' : 'Image'}
         </button>
 
@@ -1243,7 +1289,7 @@ export function TobyworldPondPassport() {
           type="button"
           className="ghost"
           onClick={() => void fetchPassport(false)}
-          disabled={isLoading || isRerolling || !hasEnoughAssets}
+          disabled={isLoading || isRerolling || !hasEnoughAssets || !hasQuickAuth}
         >
           {isLoading ? 'Loading…' : 'Reload'}
         </button>
