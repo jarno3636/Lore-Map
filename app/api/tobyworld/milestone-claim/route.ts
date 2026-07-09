@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getAddress, isAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -12,9 +13,10 @@ import {
 } from '@/lib/tobyworld-milestone-contract';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 type ClaimBody = {
-  tokenId?: number;
+  tokenId?: number | string;
   walletAddress?: string;
 };
 
@@ -32,6 +34,20 @@ function getErrorMessage(error: unknown) {
   return 'Unknown server error.';
 }
 
+function parseTokenId(value: ClaimBody['tokenId']) {
+  const tokenId = Number(value);
+
+  if (!Number.isSafeInteger(tokenId) || tokenId <= 0) {
+    return null;
+  }
+
+  return tokenId;
+}
+
+function createNonce() {
+  return BigInt(`0x${randomBytes(16).toString('hex')}`);
+}
+
 function getClaimSigner() {
   const privateKey = process.env.MILESTONE_CLAIM_SIGNER_PRIVATE_KEY?.trim();
 
@@ -39,7 +55,20 @@ function getClaimSigner() {
     throw new Error('Missing MILESTONE_CLAIM_SIGNER_PRIVATE_KEY.');
   }
 
-  return privateKeyToAccount(privateKey as `0x${string}`);
+  const signer = privateKeyToAccount(privateKey as `0x${string}`);
+  const expectedSigner = process.env.MILESTONE_CLAIM_SIGNER_ADDRESS?.trim();
+
+  if (expectedSigner && isAddress(expectedSigner)) {
+    const expected = getAddress(expectedSigner);
+
+    if (signer.address !== expected) {
+      throw new Error(
+        `Claim signer mismatch. Server key resolves to ${signer.address}, but expected ${expected}.`,
+      );
+    }
+  }
+
+  return signer;
 }
 
 async function readBody(request: Request) {
@@ -85,29 +114,35 @@ export async function POST(request: Request) {
     const auth = await requireFarcasterFid(request);
 
     if (!auth.ok) {
-      return json({ error: auth.error }, auth.status);
+      return json({ error: auth.error, code: 'auth_required' }, auth.status);
     }
 
     if (!MILESTONE_RELICS_ADDRESS) {
-      return json({ error: 'Missing NEXT_PUBLIC_MILESTONE_RELICS_ADDRESS.' }, 500);
+      return json(
+        {
+          error: 'Missing NEXT_PUBLIC_MILESTONE_RELICS_ADDRESS.',
+          code: 'missing_contract',
+        },
+        500,
+      );
     }
 
     const body = await readBody(request);
-    const tokenId = Number(body.tokenId);
-    const walletAddress = body.walletAddress;
+    const tokenId = parseTokenId(body.tokenId);
+    const rawWalletAddress = body.walletAddress?.trim();
 
-    if (!Number.isFinite(tokenId)) {
-      return json({ error: 'Invalid tokenId.' }, 400);
+    if (!tokenId) {
+      return json({ error: 'Invalid tokenId.', code: 'invalid_token_id' }, 400);
     }
 
-    if (!walletAddress || !isAddress(walletAddress)) {
-      return json({ error: 'Invalid wallet address.' }, 400);
+    if (!rawWalletAddress || !isAddress(rawWalletAddress)) {
+      return json({ error: 'Invalid wallet address.', code: 'invalid_wallet' }, 400);
     }
 
     const milestone = getMilestoneByTokenId(tokenId);
 
     if (!milestone) {
-      return json({ error: 'Unknown milestone relic.' }, 404);
+      return json({ error: 'Unknown milestone relic.', code: 'unknown_relic' }, 404);
     }
 
     const [totalEchoes, userRiteCount] = await Promise.all([
@@ -120,10 +155,14 @@ export async function POST(request: Request) {
     if (!progress.unlocked) {
       return json(
         {
-          error: 'This relic is still locked.',
+          error: `${milestone.title} is still locked. ${progress.remaining.toLocaleString(
+            'en-US',
+          )} echoes remain.`,
+          code: 'relic_locked',
           totalEchoes,
           requiredEchoes: milestone.threshold,
           remaining: progress.remaining,
+          milestone,
         },
         403,
       );
@@ -133,15 +172,18 @@ export async function POST(request: Request) {
       return json(
         {
           error: 'Complete at least one Daily Rite before claiming a relic.',
+          code: 'daily_rite_required',
+          totalEchoes,
+          milestone,
         },
         403,
       );
     }
 
     const signer = getClaimSigner();
-    const to = getAddress(walletAddress);
+    const to = getAddress(rawWalletAddress);
 
-    const nonce = BigInt(Date.now());
+    const nonce = createNonce();
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 15 * 60);
 
     const signature = await signer.signTypedData({
@@ -171,6 +213,7 @@ export async function POST(request: Request) {
     });
 
     return json({
+      ok: true,
       fid: auth.fid,
       to,
       tokenId,
@@ -179,10 +222,28 @@ export async function POST(request: Request) {
       signature,
       contractAddress: MILESTONE_RELICS_ADDRESS,
       chainId: MILESTONE_CHAIN_ID,
+      signerAddress: signer.address,
+      expiresInSeconds: 900,
+      totalEchoes,
+      userRiteCount,
+      milestone: {
+        id: milestone.id,
+        tokenId: milestone.tokenId,
+        title: milestone.title,
+        threshold: milestone.threshold,
+        symbol: milestone.symbol,
+        imageSrc: milestone.imageSrc,
+      },
     });
   } catch (error) {
     console.error('Milestone claim API failed:', error);
 
-    return json({ error: getErrorMessage(error) }, 500);
+    return json(
+      {
+        error: getErrorMessage(error),
+        code: 'claim_signature_failed',
+      },
+      500,
+    );
   }
 }
