@@ -2103,31 +2103,35 @@ img {
   top: 0;
   z-index: 80;
   width: 100%;
-  padding: 10px clamp(10px, 3vw, 22px);
+  padding: 10px clamp(8px, 3vw, 22px);
   background:
-    linear-gradient(180deg, rgba(3, 13, 18, 0.94), rgba(3, 13, 18, 0.64)),
-    radial-gradient(circle at 50% 0%, rgba(103, 213, 246, 0.14), transparent 56%);
+    linear-gradient(180deg, rgba(3, 13, 18, 0.97), rgba(3, 13, 18, 0.74)),
+    radial-gradient(circle at 14% 0%, rgba(255, 91, 81, 0.08), transparent 44%),
+    radial-gradient(circle at 50% 0%, rgba(103, 213, 246, 0.14), transparent 56%),
+    radial-gradient(circle at 86% 0%, rgba(249, 201, 104, 0.08), transparent 44%);
   border-bottom: 1px solid rgba(146, 223, 241, 0.13);
   backdrop-filter: blur(18px);
   transition:
     padding 180ms ease,
     background 180ms ease,
-    border-color 180ms ease;
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .toby-nav.is-scrolled {
   padding-top: 7px;
   padding-bottom: 7px;
   background:
-    linear-gradient(180deg, rgba(3, 13, 18, 0.98), rgba(3, 13, 18, 0.78)),
-    radial-gradient(circle at 50% 0%, rgba(249, 201, 104, 0.1), transparent 58%);
+    linear-gradient(180deg, rgba(3, 13, 18, 0.99), rgba(3, 13, 18, 0.84)),
+    radial-gradient(circle at 50% 0%, rgba(249, 201, 104, 0.11), transparent 58%);
   border-bottom-color: rgba(249, 201, 104, 0.16);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
 }
 
 .toby-nav-inner {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(172px, auto) 1fr;
+  gap: 14px;
   align-items: center;
   width: min(100%, 1180px);
   margin-inline: auto;
@@ -2146,15 +2150,15 @@ img {
 .toby-nav-brand-mark {
   position: relative;
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   overflow: hidden;
   border: 1px solid rgba(146, 223, 241, 0.24);
-  border-radius: 15px;
+  border-radius: 16px;
   background:
-    radial-gradient(circle at 50% 30%, rgba(103, 213, 246, 0.26), transparent 62%),
-    rgba(7, 31, 40, 0.86);
+    radial-gradient(circle at 50% 30%, rgba(103, 213, 246, 0.28), transparent 62%),
+    rgba(7, 31, 40, 0.88);
   box-shadow:
     inset 0 0 20px rgba(103, 213, 246, 0.08),
     0 0 24px rgba(103, 213, 246, 0.14);
@@ -2199,7 +2203,7 @@ img {
 }
 
 .toby-nav-brand small {
-  max-width: 180px;
+  max-width: 190px;
   margin-top: 4px;
   overflow: hidden;
   color: #8ddff1;
@@ -2213,34 +2217,34 @@ img {
 }
 
 .toby-nav-links {
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
   gap: 7px;
-  overflow-x: auto;
-  padding: 3px;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
+  min-width: 0;
 }
 
-.toby-nav-links::-webkit-scrollbar {
-  display: none;
+.toby-nav-link-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
 }
 
 .toby-nav-link {
   position: relative;
-  display: inline-grid;
+  display: grid;
   grid-template-columns: auto auto;
   gap: 6px;
   align-items: center;
-  white-space: nowrap;
+  justify-content: center;
+  min-width: 0;
   border: 1px solid rgba(146, 223, 241, 0.14);
   border-radius: 999px;
-  padding: 9px 11px;
+  padding: 8px 9px;
   color: #c9e8ed;
   background:
     radial-gradient(circle at 50% 0%, rgba(146, 223, 241, 0.08), transparent 65%),
     rgba(7, 31, 40, 0.64);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   text-decoration: none;
   box-shadow: inset 0 0 14px rgba(146, 223, 241, 0.03);
@@ -2298,7 +2302,12 @@ img {
 }
 
 .toby-nav-link b {
+  min-width: 0;
+  overflow: hidden;
   font: inherit;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toby-nav-link.accent-red .toby-nav-symbol {
@@ -2309,16 +2318,30 @@ img {
   color: #a8e984;
 }
 
-.toby-nav-link.accent-blue .toby-nav-symbol {
+.toby-nav-link.accent-blue .toby-nav-symbol,
+.toby-nav-link.accent-swap .toby-nav-symbol {
   color: #8de9ff;
 }
 
 .toby-nav-link.accent-gold .toby-nav-symbol,
-.toby-nav-link.accent-relic .toby-nav-symbol {
+.toby-nav-link.accent-relic .toby-nav-symbol,
+.toby-nav-link.accent-passport .toby-nav-symbol {
   color: #ffe3a0;
 }
 
-@media (max-width: 720px) {
+.toby-nav-link.accent-pond .toby-nav-symbol {
+  color: #8de9ff;
+}
+
+.toby-nav-link.accent-swap.is-active {
+  background: linear-gradient(135deg, #8de9ff, #f8d77d, #9cffb1);
+}
+
+.toby-nav-link.accent-passport.is-active {
+  background: linear-gradient(135deg, #ffe3a0, #8de9ff, #f6b8ff);
+}
+
+@media (max-width: 980px) {
   .toby-nav-inner {
     grid-template-columns: 1fr;
     gap: 9px;
@@ -2329,14 +2352,9 @@ img {
     max-width: 100%;
     margin-inline: auto;
   }
-
-  .toby-nav-links {
-    justify-content: flex-start;
-    margin-inline: -3px;
-  }
 }
 
-@media (max-width: 460px) {
+@media (max-width: 560px) {
   .toby-nav {
     padding-inline: 8px;
   }
@@ -2347,10 +2365,44 @@ img {
     border-radius: 14px;
   }
 
+  .toby-nav-brand strong {
+    font-size: 12px;
+  }
+
+  .toby-nav-brand small {
+    max-width: 230px;
+    font-size: 8px;
+  }
+
+  .toby-nav-links {
+    gap: 6px;
+  }
+
+  .toby-nav-link-row {
+    gap: 6px;
+  }
+
   .toby-nav-link {
-    gap: 5px;
-    padding: 8px 9px;
-    font-size: 10px;
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 7px 4px;
+    border-radius: 16px;
+    font-size: 8.5px;
+    text-align: center;
+  }
+
+  .toby-nav-symbol {
+    width: 22px;
+    height: 22px;
+    margin-inline: auto;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .toby-nav-link {
+    font-size: 8px;
+    padding-inline: 3px;
   }
 
   .toby-nav-symbol {
@@ -2371,7 +2423,6 @@ img {
     transform: translateX(90%) rotate(12deg);
   }
 }
-
 /* -------------------------------------------------------------------------- */
 /* Community Page                                                              */
 /* -------------------------------------------------------------------------- */
