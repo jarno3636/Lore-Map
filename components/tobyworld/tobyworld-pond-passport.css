@@ -352,6 +352,11 @@
   margin-top: 10px;
 }
 
+@media (max-width: 520px) {
+  .pond-passport-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 .pond-passport-actions button {
   border: 1px solid rgba(249, 201, 104, 0.2);
   border-radius: 14px;
