@@ -3,60 +3,34 @@ import { DailyPondRite } from '@/components/tobyworld/DailyPondRite';
 import { TobyworldSignalProfile } from '@/components/tobyworld/TobyworldSignalProfile';
 import { TobyworldSwapGateway } from '@/components/tobyworld/TobyworldSwapGateway';
 
-const featureCards = [
-  {
-    eyebrow: 'THE POND',
-    title: 'Toby waits',
-    copy: 'The still center.',
-    icon: '🐸',
-  },
-  {
-    eyebrow: 'RED GRAIN',
-    title: 'Patience falls',
-    copy: 'The first ripple.',
-    icon: '△',
-  },
-  {
-    eyebrow: 'LEAF GARDEN',
-    title: 'Taboshi grows',
-    copy: 'The quiet bloom.',
-    icon: '🍃',
-  },
-  {
-    eyebrow: 'BLUE CURRENT',
-    title: 'Sato returns',
-    copy: 'The moving water.',
-    icon: '🌀',
-  },
-  {
-    eyebrow: 'GOLDEN GATE',
-    title: 'Be still',
-    copy: 'Not all paths yet open.',
-    icon: '✦',
-  },
-];
-
 const quickPaths = [
   {
-    eyebrow: 'STEP ONE',
-    title: 'Choose a token',
-    copy: 'Open the Swap Gate for Toby, Taboshi, or Patience on Base.',
+    eyebrow: 'SWAP GATE',
+    title: 'Choose your token',
+    copy: 'Open Toby, Taboshi, or Patience through the native Farcaster swap flow or Sushi on web.',
     href: '#swap-gateway',
     icon: '⇄',
   },
   {
-    eyebrow: 'STEP TWO',
-    title: 'Return daily',
-    copy: 'Complete the Daily Rite. Streaks build echo power for relic milestones.',
+    eyebrow: 'DAILY RITE',
+    title: 'Build echo power',
+    copy: 'Return daily. Streaks increase the weight your rite adds toward community relics.',
     href: '#daily-rite',
     icon: '△',
   },
   {
-    eyebrow: 'STEP THREE',
-    title: 'Unlock relics',
-    copy: 'Community echoes open milestone NFT relics over time.',
+    eyebrow: 'RELICS',
+    title: 'Unlock milestones',
+    copy: 'Weighted echoes open Tobyworld milestone relics that eligible frogs can claim onchain.',
     href: '/milestones',
     icon: '🏺',
+  },
+  {
+    eyebrow: 'ATLAS',
+    title: 'Explore the pond',
+    copy: 'Touch the runes, follow the lore, and move through the living Tobyworld flywheel.',
+    href: '#atlas',
+    icon: '☷',
   },
 ];
 
@@ -83,8 +57,8 @@ export default function Home() {
 
           <p>
             Toby waits at the center. Patience falls. Taboshi grows. Sato returns.
-            Open the Swap Gate, complete the Daily Rite, and help the pond unlock
-            milestone relics.
+            Open the Swap Gate, complete the Daily Rite, build echo power, and help
+            the pond unlock milestone relics.
           </p>
 
           <div className="home-hero-actions">
@@ -150,17 +124,6 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="home-feature-grid" aria-label="Tobyworld regions">
-        {featureCards.map((feature) => (
-          <article className="home-feature-card" key={feature.title}>
-            <span className="home-feature-icon">{feature.icon}</span>
-            <p>{feature.eyebrow}</p>
-            <h2>{feature.title}</h2>
-            <span>{feature.copy}</span>
-          </article>
-        ))}
-      </section>
-
       <section className="home-quick-paths" aria-label="Tobyworld path">
         {quickPaths.map((path) => (
           <a href={path.href} className="home-quick-path-card" key={path.title}>
@@ -179,8 +142,8 @@ export default function Home() {
           <p className="home-kicker">SWAP GATE</p>
           <h2>Choose your path.</h2>
           <p>
-            Open a Base swap for Toby, Taboshi, or Patience. The app sends you to
-            the swap gate; your wallet handles the trade.
+            Open a Base swap for Toby, Taboshi, or Patience. In Farcaster, the app
+            uses the native swap flow when available. On web, it falls back to Sushi.
           </p>
         </div>
 
@@ -215,8 +178,8 @@ export default function Home() {
           <p className="home-kicker">SHRINE</p>
           <h2>Ask the pond.</h2>
           <p>
-            Reveal the role your path carries, then cast your generated
-            Tobyworld quote.
+            Reveal the role your path carries, then cast your generated Tobyworld
+            quote.
           </p>
         </div>
 
