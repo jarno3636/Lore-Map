@@ -1,5 +1,6 @@
 import { TobyworldAtlas } from '@/components/TobyworldAtlas';
 import { DailyPondRite } from '@/components/tobyworld/DailyPondRite';
+import { TobyworldPondPassport } from '@/components/tobyworld/TobyworldPondPassport';
 import { TobyworldSignalProfile } from '@/components/tobyworld/TobyworldSignalProfile';
 import { TobyworldSwapGateway } from '@/components/tobyworld/TobyworldSwapGateway';
 
@@ -7,21 +8,28 @@ const quickPaths = [
   {
     eyebrow: 'SWAP GATE',
     title: 'Choose your token',
-    copy: 'Open Toby, Taboshi, or Patience through the native Farcaster swap flow or Sushi on web.',
+    copy: 'Open Toby, Taboshi, or Patience through native Farcaster swap or Sushi on web.',
     href: '#swap-gateway',
     icon: '⇄',
   },
   {
     eyebrow: 'DAILY RITE',
     title: 'Build echo power',
-    copy: 'Return daily. Streaks increase the weight your rite adds toward community relics.',
+    copy: 'Return daily. Streaks increase the weight your rite adds toward relic milestones.',
     href: '#daily-rite',
     icon: '△',
   },
   {
+    eyebrow: 'PASSPORT',
+    title: 'Get your stamp',
+    copy: 'Generate a funny Tobyworld title, trait, warning, and share quote from your activity.',
+    href: '#pond-passport',
+    icon: '🪪',
+  },
+  {
     eyebrow: 'RELICS',
     title: 'Unlock milestones',
-    copy: 'Weighted echoes open Tobyworld milestone relics that eligible frogs can claim onchain.',
+    copy: 'Weighted echoes open Tobyworld relics that eligible frogs can claim onchain.',
     href: '/milestones',
     icon: '🏺',
   },
@@ -57,8 +65,8 @@ export default function Home() {
 
           <p>
             Toby waits at the center. Patience falls. Taboshi grows. Sato returns.
-            Open the Swap Gate, complete the Daily Rite, build echo power, and help
-            the pond unlock milestone relics.
+            Open the Swap Gate, complete the Daily Rite, build echo power, stamp
+            your Pond Passport, and help unlock milestone relics.
           </p>
 
           <div className="home-hero-actions">
@@ -68,8 +76,8 @@ export default function Home() {
             <a href="#daily-rite" className="home-secondary-link">
               Daily Rite
             </a>
-            <a href="/milestones" className="home-secondary-link">
-              Relics
+            <a href="#pond-passport" className="home-secondary-link">
+              Pond Passport
             </a>
           </div>
 
@@ -118,7 +126,7 @@ export default function Home() {
 
             <div className="home-preview-copy">
               <strong>The pond remembers.</strong>
-              <small>Swap Gate · Daily Rite · Echo Power · Relics</small>
+              <small>Swap Gate · Daily Rite · Passport · Relics</small>
             </div>
           </div>
         </div>
@@ -163,6 +171,19 @@ export default function Home() {
         <DailyPondRite />
       </section>
 
+      <section id="pond-passport" className="home-section">
+        <div className="home-section-heading">
+          <p className="home-kicker">POND PASSPORT</p>
+          <h2>Get your stamp.</h2>
+          <p>
+            Generate a funny Tobyworld title, trait, strange habit, pond warning,
+            and share quote based on your Daily Rite activity.
+          </p>
+        </div>
+
+        <TobyworldPondPassport />
+      </section>
+
       <section id="atlas" className="home-section">
         <div className="home-section-heading">
           <p className="home-kicker">ATLAS</p>
@@ -195,6 +216,9 @@ export default function Home() {
           </a>
           <a href="/milestones" rel="noreferrer">
             Relics ↗
+          </a>
+          <a href="#pond-passport" rel="noreferrer">
+            Passport ↗
           </a>
           <a href="https://toadgod.xyz" target="_blank" rel="noreferrer">
             Toadgod ↗
