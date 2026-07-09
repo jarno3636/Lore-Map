@@ -315,26 +315,10 @@
   padding: 0 14px 14px;
 }
 
-.toby-swap-actions button {
-  border: 1px solid rgba(249, 201, 104, 0.2);
-  border-radius: 16px;
-  padding: 12px 13px;
-  color: #d8d3bc;
-  background: rgba(35, 28, 18, 0.54);
-  font-size: 12px;
-  font-weight: 950;
-  cursor: pointer;
+14px;
 }
 
-.toby-swap-actions button.primary {
-  color: #061419;
-  background: linear-gradient(135deg, #f8d77d, #8de9ff);
-}
 
-.toby-swap-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
-}
 
 .toby-swap-hidden-link {
   display: block;
