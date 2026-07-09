@@ -44,9 +44,10 @@ export async function POST(request: Request) {
     if (!verified.ok) {
       return json(
         {
+          ok: false,
           error: verified.error,
           code: 'wallet_signature_required',
-          heldAssets: 'heldAssets' in verified ? verified.heldAssets : [],
+          heldAssets: verified.heldAssets ?? [],
         },
         401,
       );
@@ -62,9 +63,12 @@ export async function POST(request: Request) {
       signature: verified.signature,
       signed_message: verified.message,
       domain,
+      held_assets: verified.heldAssets,
     });
 
-    if (error && error.code !== '23505') {
+    const alreadySupportedToday = error?.code === '23505';
+
+    if (error && !alreadySupportedToday) {
       throw new Error(error.message);
     }
 
@@ -72,19 +76,19 @@ export async function POST(request: Request) {
       ok: true,
       walletAddress: verified.walletAddress,
       riteDate: today,
-      alreadySupportedToday: error?.code === '23505',
+      alreadySupportedToday,
       echoPower: 1,
       heldAssets: verified.heldAssets,
-      message:
-        error?.code === '23505'
-          ? 'This wallet already supported today’s rite. Passport still stamped.'
-          : 'The wallet has supported today’s pond rite. Passport stamped.',
+      message: alreadySupportedToday
+        ? 'This wallet already supported today’s rite. Passport still stamped.'
+        : 'The wallet has supported today’s pond rite. Passport stamped.',
     });
   } catch (error) {
     console.error('Wallet support rite failed:', error);
 
     return json(
       {
+        ok: false,
         error: error instanceof Error ? error.message : 'Unable to support today’s rite.',
         code: 'wallet_support_failed',
       },
