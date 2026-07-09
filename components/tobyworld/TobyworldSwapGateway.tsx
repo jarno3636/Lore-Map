@@ -1,16 +1,40 @@
 'use client';
 
 import { sdk } from '@farcaster/miniapp-sdk';
-import { useMemo, useState } from 'react';
+import { MouseEvent, useEffect, useMemo, useState } from 'react';
 import {
+  BASE_NATIVE_TOKEN_CAIP19,
   TOBYWORLD_SWAP_TOKENS,
   getSushiSwapUrl,
   type TobyworldSwapToken,
 } from '@/lib/tobyworld-swap-tokens';
 import './tobyworld-swap-gateway.css';
 
-type OpenUrlSdk = typeof sdk & {
+type SwapTokenResult =
+  | {
+      success: true;
+      swap: {
+        transactions: `0x${string}`[];
+      };
+    }
+  | {
+      success: false;
+      reason: 'rejected_by_user' | 'swap_failed' | string;
+      error?: {
+        error: string;
+        message?: string;
+      };
+    };
+
+type FarcasterSdk = typeof sdk & {
+  isInMiniApp?: (options?: unknown) => Promise<boolean>;
   actions?: {
+    swapToken?: (params: {
+      sellToken?: string;
+      buyToken?: string;
+      sellAmount?: string;
+    }) => Promise<SwapTokenResult>;
+    viewToken?: (params: { token: string }) => Promise<void>;
     openUrl?: (url: string) => void | Promise<void>;
   };
 };
@@ -19,8 +43,14 @@ function shortenAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function getOpenUrlAction() {
-  return (sdk as OpenUrlSdk).actions?.openUrl;
+function getTokenIcon(token: TobyworldSwapToken) {
+  if (token.id === 'toby') return '🐸';
+  if (token.id === 'taboshi') return '🍃';
+  return '△';
+}
+
+function getFarcasterSdk() {
+  return sdk as FarcasterSdk;
 }
 
 async function copyText(value: string) {
@@ -38,34 +68,77 @@ async function copyText(value: string) {
 
 export function TobyworldSwapGateway() {
   const [status, setStatus] = useState<string | null>(null);
+  const [isMiniApp, setIsMiniApp] = useState(false);
   const [activeTokenId, setActiveTokenId] = useState<TobyworldSwapToken['id'] | null>(null);
 
   const featuredToken = useMemo(() => TOBYWORLD_SWAP_TOKENS[0], []);
 
-  async function openSwap(token: TobyworldSwapToken) {
-    const swapUrl = getSushiSwapUrl(token);
+  useEffect(() => {
+    let mounted = true;
 
-    setStatus(`Opening ${token.symbol} swap on Base…`);
+    async function detectMiniApp() {
+      try {
+        const farcasterSdk = getFarcasterSdk();
+        const detected = await farcasterSdk.isInMiniApp?.({ timeoutMs: 200 });
+
+        if (mounted) {
+          setIsMiniApp(Boolean(detected));
+        }
+      } catch {
+        if (mounted) {
+          setIsMiniApp(false);
+        }
+      }
+    }
+
+    void detectMiniApp();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  async function handleSwapClick(
+    event: MouseEvent<HTMLAnchorElement>,
+    token: TobyworldSwapToken,
+  ) {
+    const farcasterSdk = getFarcasterSdk();
+    const nativeSwap = farcasterSdk.actions?.swapToken;
+
+    if (!isMiniApp || !nativeSwap) {
+      return;
+    }
+
+    event.preventDefault();
+
+    setStatus(`Opening native Farcaster swap for ${token.symbol}…`);
     setActiveTokenId(token.id);
 
     try {
-      const openUrl = getOpenUrlAction();
+      const result = await nativeSwap({
+        sellToken: BASE_NATIVE_TOKEN_CAIP19,
+        buyToken: token.caip19Id,
+      });
 
-      if (openUrl) {
-        await Promise.resolve(openUrl(swapUrl));
-        setStatus(`${token.symbol} swap opened.`);
+      if (result.success) {
+        const txCount = result.swap.transactions.length;
+
+        setStatus(
+          txCount > 0
+            ? `${token.symbol} swap submitted in Farcaster.`
+            : `${token.symbol} swap opened in Farcaster.`,
+        );
         return;
       }
 
-      const openedWindow = window.open(swapUrl, '_blank', 'noopener,noreferrer');
-
-      if (!openedWindow) {
-        window.location.assign(swapUrl);
+      if (result.reason === 'rejected_by_user') {
+        setStatus('Swap cancelled.');
+        return;
       }
 
-      setStatus(`${token.symbol} swap opened.`);
+      setStatus(result.error?.message ?? 'Native swap failed. Use the Sushi fallback link.');
     } catch {
-      window.location.assign(swapUrl);
+      setStatus('Native Farcaster swap was unavailable. Use the Sushi fallback link.');
     } finally {
       window.setTimeout(() => {
         setActiveTokenId(null);
@@ -73,24 +146,29 @@ export function TobyworldSwapGateway() {
     }
   }
 
-  async function openTokenDetails(token: TobyworldSwapToken) {
-    setStatus(`Opening ${token.symbol} token details…`);
+  async function handleTokenDetailsClick(
+    event: MouseEvent<HTMLAnchorElement>,
+    token: TobyworldSwapToken,
+  ) {
+    const farcasterSdk = getFarcasterSdk();
+    const nativeViewToken = farcasterSdk.actions?.viewToken;
+
+    if (!isMiniApp || !nativeViewToken) {
+      return;
+    }
+
+    event.preventDefault();
+
+    setStatus(`Opening ${token.symbol} in Farcaster…`);
 
     try {
-      const openUrl = getOpenUrlAction();
+      await nativeViewToken({
+        token: token.caip19Id,
+      });
 
-      if (openUrl) {
-        await Promise.resolve(openUrl(token.tokenDetailsUrl));
-        return;
-      }
-
-      const openedWindow = window.open(token.tokenDetailsUrl, '_blank', 'noopener,noreferrer');
-
-      if (!openedWindow) {
-        window.location.assign(token.tokenDetailsUrl);
-      }
+      setStatus(`${token.symbol} token view opened.`);
     } catch {
-      window.location.assign(token.tokenDetailsUrl);
+      setStatus('Native token view was unavailable. Use the Basescan fallback link.');
     }
   }
 
@@ -115,17 +193,17 @@ export function TobyworldSwapGateway() {
           <p>TOBYWORLD SWAP GATE</p>
           <h2>Enter through the pond.</h2>
           <span>
-            Open a Base swap for Tobyworld assets. Farcaster opens the swap through the
-            Mini App client; normal browsers open Sushi directly.
+            In Farcaster, swaps open through the native Farcaster swap flow. On the
+            normal web, the same buttons fall back to Sushi on Base.
           </span>
         </div>
 
         <div className="toby-swap-feature">
           <img src={featuredToken.imageSrc} alt="" aria-hidden="true" />
           <div>
-            <small>DEFAULT PATH</small>
-            <strong>ETH → Tobyworld</strong>
-            <span>Always verify the token before swapping.</span>
+            <small>{isMiniApp ? 'FARCASTER PATH' : 'WEB PATH'}</small>
+            <strong>{isMiniApp ? 'Native swap' : 'Sushi fallback'}</strong>
+            <span>Always verify token address, price impact, and slippage.</span>
           </div>
         </div>
       </header>
@@ -147,7 +225,7 @@ export function TobyworldSwapGateway() {
             <article className={`toby-swap-card accent-${token.accent}`} key={token.id}>
               <div className="toby-swap-card-image">
                 <img src={token.imageSrc} alt={token.name} />
-                <span>{token.id === 'toby' ? '🐸' : token.id === 'taboshi' ? '🍃' : '△'}</span>
+                <span>{getTokenIcon(token)}</span>
               </div>
 
               <div className="toby-swap-card-copy">
@@ -166,22 +244,33 @@ export function TobyworldSwapGateway() {
               </div>
 
               <div className="toby-swap-actions">
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => void openSwap(token)}
-                  disabled={isActive}
+                <a
+                  href={swapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`toby-swap-button primary ${isActive ? 'is-loading' : ''}`}
+                  onClick={(event) => void handleSwapClick(event, token)}
                 >
-                  {isActive ? 'Opening…' : `Swap for ${token.symbol}`}
-                </button>
+                  {isActive
+                    ? 'Opening…'
+                    : isMiniApp
+                      ? `Native Swap ${token.symbol}`
+                      : `Swap ${token.symbol} on Sushi`}
+                </a>
 
-                <button type="button" onClick={() => void openTokenDetails(token)}>
-                  Token Details
-                </button>
+                <a
+                  href={token.tokenDetailsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="toby-swap-button"
+                  onClick={(event) => void handleTokenDetailsClick(event, token)}
+                >
+                  {isMiniApp ? 'Farcaster Token Info' : 'Token Info'}
+                </a>
               </div>
 
               <a className="toby-swap-hidden-link" href={swapUrl} target="_blank" rel="noreferrer">
-                Open direct Sushi link
+                Sushi fallback ↗
               </a>
             </article>
           );
@@ -190,8 +279,8 @@ export function TobyworldSwapGateway() {
 
       <footer className="toby-swap-footer">
         <p>
-          This opens third-party swap pages. Check token address, slippage, price impact,
-          and wallet network before confirming.
+          This is only a gateway. You choose the token, review the quote, and confirm
+          through your wallet or Farcaster swap screen.
         </p>
 
         {status && <span role="status">{status}</span>}
