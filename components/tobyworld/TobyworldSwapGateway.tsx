@@ -27,7 +27,7 @@ type SwapTokenResult =
     };
 
 type FarcasterSdk = typeof sdk & {
-  isInMiniApp?: (options?: unknown) => Promise<boolean>;
+  isInMiniApp?: (options?: { timeoutMs?: number }) => Promise<boolean>;
   actions?: {
     swapToken?: (params: {
       sellToken?: string;
@@ -66,6 +66,22 @@ async function copyText(value: string) {
   }
 }
 
+async function openExternalUrl(url: string) {
+  const farcasterSdk = getFarcasterSdk();
+  const openUrl = farcasterSdk.actions?.openUrl;
+
+  if (openUrl) {
+    await Promise.resolve(openUrl(url));
+    return;
+  }
+
+  const openedWindow = window.open(url, '_blank', 'noopener,noreferrer');
+
+  if (!openedWindow) {
+    window.location.assign(url);
+  }
+}
+
 export function TobyworldSwapGateway() {
   const [status, setStatus] = useState<string | null>(null);
   const [isMiniApp, setIsMiniApp] = useState(false);
@@ -79,7 +95,7 @@ export function TobyworldSwapGateway() {
     async function detectMiniApp() {
       try {
         const farcasterSdk = getFarcasterSdk();
-        const detected = await farcasterSdk.isInMiniApp?.({ timeoutMs: 200 });
+        const detected = await farcasterSdk.isInMiniApp?.({ timeoutMs: 500 });
 
         if (mounted) {
           setIsMiniApp(Boolean(detected));
@@ -105,11 +121,17 @@ export function TobyworldSwapGateway() {
     const farcasterSdk = getFarcasterSdk();
     const nativeSwap = farcasterSdk.actions?.swapToken;
 
-    if (!isMiniApp || !nativeSwap) {
+    if (!isMiniApp) {
       return;
     }
 
     event.preventDefault();
+
+    if (!nativeSwap) {
+      setStatus('Native Farcaster swap is unavailable. Opening Sushi fallback…');
+      await openExternalUrl(getSushiSwapUrl(token));
+      return;
+    }
 
     setStatus(`Opening native Farcaster swap for ${token.symbol}…`);
     setActiveTokenId(token.id);
@@ -136,9 +158,18 @@ export function TobyworldSwapGateway() {
         return;
       }
 
-      setStatus(result.error?.message ?? 'Native swap failed. Use the Sushi fallback link.');
-    } catch {
-      setStatus('Native Farcaster swap was unavailable. Use the Sushi fallback link.');
+      setStatus(
+        result.error?.message ??
+          `Farcaster could not open ${token.symbol}. Use the Sushi fallback below.`,
+      );
+    } catch (error) {
+      console.error('Native Farcaster swap failed:', {
+        symbol: token.symbol,
+        caip19Id: token.caip19Id,
+        error,
+      });
+
+      setStatus(`Native Farcaster swap failed for ${token.symbol}. Use the Sushi fallback below.`);
     } finally {
       window.setTimeout(() => {
         setActiveTokenId(null);
@@ -153,11 +184,17 @@ export function TobyworldSwapGateway() {
     const farcasterSdk = getFarcasterSdk();
     const nativeViewToken = farcasterSdk.actions?.viewToken;
 
-    if (!isMiniApp || !nativeViewToken) {
+    if (!isMiniApp) {
       return;
     }
 
     event.preventDefault();
+
+    if (!nativeViewToken) {
+      setStatus('Native token view is unavailable. Opening Basescan fallback…');
+      await openExternalUrl(token.tokenDetailsUrl);
+      return;
+    }
 
     setStatus(`Opening ${token.symbol} in Farcaster…`);
 
@@ -167,8 +204,14 @@ export function TobyworldSwapGateway() {
       });
 
       setStatus(`${token.symbol} token view opened.`);
-    } catch {
-      setStatus('Native token view was unavailable. Use the Basescan fallback link.');
+    } catch (error) {
+      console.error('Native Farcaster token view failed:', {
+        symbol: token.symbol,
+        caip19Id: token.caip19Id,
+        error,
+      });
+
+      setStatus(`Native token view failed for ${token.symbol}. Use the Basescan fallback below.`);
     }
   }
 
@@ -271,6 +314,15 @@ export function TobyworldSwapGateway() {
 
               <a className="toby-swap-hidden-link" href={swapUrl} target="_blank" rel="noreferrer">
                 Sushi fallback ↗
+              </a>
+
+              <a
+                className="toby-swap-hidden-link"
+                href={token.tokenDetailsUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Basescan fallback ↗
               </a>
             </article>
           );
