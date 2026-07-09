@@ -1,33 +1,19 @@
 import type { Address } from 'viem';
 
-export type MilestoneChainId = 8453 | 84532;
-
-function parseMilestoneChainId(): MilestoneChainId {
-  const rawChainId = process.env.NEXT_PUBLIC_MILESTONE_CHAIN_ID;
-
-  if (rawChainId === '84532') return 84532;
-  if (rawChainId === '8453') return 8453;
-
-  return 84532;
-}
-
 export const MILESTONE_RELICS_ADDRESS = process.env
   .NEXT_PUBLIC_MILESTONE_RELICS_ADDRESS as Address | undefined;
 
-export const MILESTONE_CHAIN_ID = parseMilestoneChainId();
+export const MILESTONE_CHAIN_ID = 8453 as const;
 
 export const MILESTONE_EIP712_NAME = 'TobyworldMilestoneRelicsClean';
 export const MILESTONE_EIP712_VERSION = '1';
 
-export function getMilestoneChainName(chainId: MilestoneChainId = MILESTONE_CHAIN_ID) {
-  if (chainId === 8453) return 'Base';
-  return 'Base Sepolia';
+export function getMilestoneChainName() {
+  return 'Base';
 }
 
 export function getMilestoneBaseScanUrl(txHash: string) {
-  const subdomain = MILESTONE_CHAIN_ID === 84532 ? 'sepolia.' : '';
-
-  return `https://${subdomain}basescan.org/tx/${txHash}`;
+  return `https://basescan.org/tx/${txHash}`;
 }
 
 export const MILESTONE_RELICS_ABI = [
