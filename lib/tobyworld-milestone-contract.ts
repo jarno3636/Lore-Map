@@ -10,6 +10,12 @@ export const MILESTONE_CHAIN_ID = Number(
 export const MILESTONE_EIP712_NAME = 'TobyworldMilestoneRelicsClean';
 export const MILESTONE_EIP712_VERSION = '1';
 
+export function getMilestoneChainName(chainId = MILESTONE_CHAIN_ID) {
+  if (chainId === 8453) return 'Base';
+  if (chainId === 84532) return 'Base Sepolia';
+  return `Chain ${chainId}`;
+}
+
 export const MILESTONE_RELICS_ABI = [
   {
     type: 'function',
@@ -53,6 +59,13 @@ export const MILESTONE_RELICS_ABI = [
       { name: 'tokenId', type: 'uint256' },
       { name: 'wallet', type: 'address' },
     ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'validTokenId',
+    stateMutability: 'pure',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
     outputs: [{ name: '', type: 'bool' }],
   },
   {
