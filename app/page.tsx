@@ -1,6 +1,7 @@
 import { TobyworldAtlas } from '@/components/TobyworldAtlas';
-import { TobyworldSignalProfile } from '@/components/tobyworld/TobyworldSignalProfile';
 import { DailyPondRite } from '@/components/tobyworld/DailyPondRite';
+import { TobyworldSignalProfile } from '@/components/tobyworld/TobyworldSignalProfile';
+import { TobyworldSwapGateway } from '@/components/tobyworld/TobyworldSwapGateway';
 
 const featureCards = [
   {
@@ -35,6 +36,30 @@ const featureCards = [
   },
 ];
 
+const quickPaths = [
+  {
+    eyebrow: 'STEP ONE',
+    title: 'Choose a token',
+    copy: 'Open the Swap Gate for Toby, Taboshi, or Patience on Base.',
+    href: '#swap-gateway',
+    icon: '⇄',
+  },
+  {
+    eyebrow: 'STEP TWO',
+    title: 'Return daily',
+    copy: 'Complete the Daily Rite. Streaks build echo power for relic milestones.',
+    href: '#daily-rite',
+    icon: '△',
+  },
+  {
+    eyebrow: 'STEP THREE',
+    title: 'Unlock relics',
+    copy: 'Community echoes open milestone NFT relics over time.',
+    href: '/milestones',
+    icon: '🏺',
+  },
+];
+
 export default function Home() {
   return (
     <main className="home-shell">
@@ -57,20 +82,20 @@ export default function Home() {
           </h1>
 
           <p>
-            Toby waits at the center. Patience falls. The leaf grows. The blue
-            current returns. Come back daily, complete the rite, and let the pond
-            remember.
+            Toby waits at the center. Patience falls. Taboshi grows. Sato returns.
+            Open the Swap Gate, complete the Daily Rite, and help the pond unlock
+            milestone relics.
           </p>
 
           <div className="home-hero-actions">
-            <a href="#daily-rite" className="home-primary-link">
+            <a href="#swap-gateway" className="home-primary-link">
+              Open Swap Gate
+            </a>
+            <a href="#daily-rite" className="home-secondary-link">
               Daily Rite
             </a>
-            <a href="#atlas" className="home-secondary-link">
-              Open Atlas
-            </a>
-            <a href="#pond-role" className="home-secondary-link">
-              Reveal Role
+            <a href="/milestones" className="home-secondary-link">
+              Relics
             </a>
           </div>
 
@@ -119,7 +144,7 @@ export default function Home() {
 
             <div className="home-preview-copy">
               <strong>The pond remembers.</strong>
-              <small>Daily Rite · Stillness · Bloom · Return</small>
+              <small>Swap Gate · Daily Rite · Echo Power · Relics</small>
             </div>
           </div>
         </div>
@@ -136,13 +161,39 @@ export default function Home() {
         ))}
       </section>
 
+      <section className="home-quick-paths" aria-label="Tobyworld path">
+        {quickPaths.map((path) => (
+          <a href={path.href} className="home-quick-path-card" key={path.title}>
+            <span>{path.icon}</span>
+            <div>
+              <p>{path.eyebrow}</p>
+              <h2>{path.title}</h2>
+              <small>{path.copy}</small>
+            </div>
+          </a>
+        ))}
+      </section>
+
+      <section id="swap-gateway" className="home-section">
+        <div className="home-section-heading">
+          <p className="home-kicker">SWAP GATE</p>
+          <h2>Choose your path.</h2>
+          <p>
+            Open a Base swap for Toby, Taboshi, or Patience. The app sends you to
+            the swap gate; your wallet handles the trade.
+          </p>
+        </div>
+
+        <TobyworldSwapGateway />
+      </section>
+
       <section id="daily-rite" className="home-section">
         <div className="home-section-heading">
           <p className="home-kicker">DAILY RITE</p>
           <h2>Return once a day.</h2>
           <p>
             Complete one small pond ritual, build your streak, earn your mark,
-            and cast the ripple back into the world.
+            and add weighted echo power toward community relic milestones.
           </p>
         </div>
 
@@ -176,6 +227,12 @@ export default function Home() {
         <p>“We move not by leaps. We move by stillness.”</p>
 
         <div>
+          <a href="/community" rel="noreferrer">
+            Shrine ↗
+          </a>
+          <a href="/milestones" rel="noreferrer">
+            Relics ↗
+          </a>
           <a href="https://toadgod.xyz" target="_blank" rel="noreferrer">
             Toadgod ↗
           </a>
