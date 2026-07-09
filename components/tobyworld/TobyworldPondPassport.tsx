@@ -82,6 +82,18 @@ type WalletSupportResponse = {
 
 type TobyworldAsset = (typeof TOBYWORLD_SWAP_TOKENS)[number];
 
+type FileShareData = {
+  title?: string;
+  text?: string;
+  url?: string;
+  files?: File[];
+};
+
+type FileShareNavigator = Navigator & {
+  canShare?: (data: FileShareData) => boolean;
+  share?: (data: FileShareData) => Promise<void>;
+};
+
 const ERC20_BALANCE_ABI = [
   {
     type: 'function',
@@ -94,6 +106,14 @@ const ERC20_BALANCE_ABI = [
 
 const BASE_CHAIN_ID = 8453 as const;
 const REQUIRED_ASSET_COUNT = 2;
+
+type AssetReadContract = {
+  address: `0x${string}`;
+  abi: typeof ERC20_BALANCE_ABI;
+  functionName: 'balanceOf';
+  args: readonly [`0x${string}`];
+  chainId: typeof BASE_CHAIN_ID;
+};
 
 const PASSPORT_FROG_BACKUPS = [
   '/images/passport/frog-lily-agent.png',
@@ -247,7 +267,10 @@ function createWalletSupporterPersona(address: string, heldAssets: TobyworldAsse
   const characteristic = pick(WALLET_CHARACTERISTICS, seed >> 3);
   const strangeHabit = pick(WALLET_HABITS, seed >> 6);
   const pondWarning = pick(WALLET_WARNINGS, seed >> 9);
-  const stamp = pick(['△ · 🐸 · 🍃', '🐸 · ⇄ · ✦', '🍃 · 🐸 · 🪪', '✦ · 🐸 · △'], seed >> 12);
+  const stamp = pick(
+    ['△ · 🐸 · 🍃', '🐸 · ⇄ · ✦', '🍃 · 🐸 · 🪪', '✦ · 🐸 · △'],
+    seed >> 12,
+  );
 
   return {
     title,
@@ -348,12 +371,311 @@ async function openExternalUrl(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
+function drawRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+
+  context.beginPath();
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+  context.closePath();
+}
+
+function fillRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  fillStyle: string | CanvasGradient,
+) {
+  drawRoundedRect(context, x, y, width, height, radius);
+  context.fillStyle = fillStyle;
+  context.fill();
+}
+
+function strokeRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  strokeStyle: string,
+  lineWidth = 1,
+) {
+  drawRoundedRect(context, x, y, width, height, radius);
+  context.strokeStyle = strokeStyle;
+  context.lineWidth = lineWidth;
+  context.stroke();
+}
+
+function wrapText({
+  context,
+  text,
+  x,
+  y,
+  maxWidth,
+  lineHeight,
+  maxLines,
+}: {
+  context: CanvasRenderingContext2D;
+  text: string;
+  x: number;
+  y: number;
+  maxWidth: number;
+  lineHeight: number;
+  maxLines: number;
+}) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = '';
+
+  for (const word of words) {
+    const testLine = line ? `${line} ${word}` : word;
+    const width = context.measureText(testLine).width;
+
+    if (width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+
+      if (lines.length >= maxLines) break;
+    } else {
+      line = testLine;
+    }
+  }
+
+  if (line && lines.length < maxLines) {
+    lines.push(line);
+  }
+
+  lines.forEach((currentLine, index) => {
+    const finalLine =
+      index === maxLines - 1 && words.join(' ').length > lines.join(' ').length
+        ? `${currentLine.replace(/[.,;:]?$/, '')}…`
+        : currentLine;
+
+    context.fillText(finalLine, x, y + index * lineHeight);
+  });
+
+  return y + lines.length * lineHeight;
+}
+
+function loadCanvasImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Image failed to load.'));
+    image.src = src.startsWith('http') ? src : `${getOrigin()}${src}`;
+  });
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Unable to create passport image.'));
+        return;
+      }
+
+      resolve(blob);
+    }, 'image/png');
+  });
+}
+
+async function createPassportImageBlob({
+  persona,
+  snapshot,
+  contextUser,
+  address,
+  photoSrc,
+  heldAssets,
+  source,
+}: {
+  persona: PondPersona;
+  snapshot?: PassportSnapshot;
+  contextUser: MiniAppUserContext | null;
+  address?: string;
+  photoSrc?: string;
+  heldAssets: TobyworldAsset[];
+  source?: string;
+}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1200;
+  canvas.height = 630;
+
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('Unable to create image context.');
+  }
+
+  const background = context.createLinearGradient(0, 0, 1200, 630);
+  background.addColorStop(0, '#061419');
+  background.addColorStop(0.45, '#172017');
+  background.addColorStop(1, '#3a2714');
+  context.fillStyle = background;
+  context.fillRect(0, 0, 1200, 630);
+
+  const glowBlue = context.createRadialGradient(220, 110, 10, 220, 110, 420);
+  glowBlue.addColorStop(0, 'rgba(141, 233, 255, 0.42)');
+  glowBlue.addColorStop(1, 'rgba(141, 233, 255, 0)');
+  context.fillStyle = glowBlue;
+  context.fillRect(0, 0, 1200, 630);
+
+  const glowGold = context.createRadialGradient(980, 70, 10, 980, 70, 420);
+  glowGold.addColorStop(0, 'rgba(248, 215, 125, 0.35)');
+  glowGold.addColorStop(1, 'rgba(248, 215, 125, 0)');
+  context.fillStyle = glowGold;
+  context.fillRect(0, 0, 1200, 630);
+
+  const card = context.createLinearGradient(92, 72, 1108, 558);
+  card.addColorStop(0, '#fff8e6');
+  card.addColorStop(1, '#e8cf99');
+
+  fillRoundedRect(context, 76, 64, 1048, 502, 46, card);
+  strokeRoundedRect(context, 76, 64, 1048, 502, 46, 'rgba(255, 227, 160, 0.72)', 3);
+
+  context.save();
+  context.globalAlpha = 0.08;
+  context.fillStyle = '#5b351a';
+  context.font = '900 160px Georgia, serif';
+  context.fillText('POND', 706, 438);
+  context.restore();
+
+  context.fillStyle = '#7b3f23';
+  context.font = '900 24px Arial, sans-serif';
+  context.letterSpacing = '4px';
+  context.fillText('TOBYWORLD POND PASSPORT', 132, 126);
+  context.letterSpacing = '0px';
+
+  context.fillStyle = '#2f1f15';
+  context.font = '900 58px Georgia, serif';
+  context.fillText(getDisplayName(snapshot, contextUser, address), 132, 188);
+
+  context.fillStyle = '#7b3f23';
+  context.font = '800 25px Arial, sans-serif';
+  context.fillText(getHandle(snapshot, contextUser, address), 134, 226);
+
+  const photoX = 858;
+  const photoY = 102;
+  const photoSize = 166;
+
+  fillRoundedRect(context, photoX, photoY, photoSize, photoSize, 34, 'rgba(255, 248, 230, 0.55)');
+  strokeRoundedRect(context, photoX, photoY, photoSize, photoSize, 34, 'rgba(91, 53, 26, 0.32)', 3);
+
+  try {
+    if (photoSrc) {
+      const image = await loadCanvasImage(photoSrc);
+
+      context.save();
+      drawRoundedRect(context, photoX + 8, photoY + 8, photoSize - 16, photoSize - 16, 28);
+      context.clip();
+      context.drawImage(image, photoX + 8, photoY + 8, photoSize - 16, photoSize - 16);
+      context.restore();
+    } else {
+      throw new Error('No photo source.');
+    }
+  } catch {
+    context.fillStyle = '#2f1f15';
+    context.font = '92px Arial, sans-serif';
+    context.fillText('🐸', photoX + 38, photoY + 112);
+  }
+
+  context.fillStyle = '#7b3f23';
+  context.font = '900 21px Arial, sans-serif';
+  context.fillText('POND TITLE', 132, 294);
+
+  context.fillStyle = '#2f1f15';
+  context.font = '900 66px Georgia, serif';
+  wrapText({
+    context,
+    text: persona.title,
+    x: 132,
+    y: 354,
+    maxWidth: 680,
+    lineHeight: 62,
+    maxLines: 2,
+  });
+
+  context.fillStyle = '#3c281b';
+  context.font = '800 26px Arial, sans-serif';
+  wrapText({
+    context,
+    text: persona.characteristic,
+    x: 132,
+    y: 466,
+    maxWidth: 710,
+    lineHeight: 32,
+    maxLines: 2,
+  });
+
+  fillRoundedRect(context, 858, 300, 204, 96, 999, 'rgba(255, 248, 230, 0.42)');
+  strokeRoundedRect(context, 858, 300, 204, 96, 999, 'rgba(123, 63, 35, 0.42)', 4);
+
+  context.fillStyle = '#2f1f15';
+  context.font = '900 25px Arial, sans-serif';
+  context.textAlign = 'center';
+  context.fillText(persona.stamp, 960, 344);
+
+  context.fillStyle = '#7b3f23';
+  context.font = '900 18px Arial, sans-serif';
+  context.fillText(source === 'wallet' ? 'WEB SUPPORTER' : 'APPROVED', 960, 374);
+  context.textAlign = 'start';
+
+  const statItems = [
+    ['STREAK', `${formatNumber(snapshot?.streakCount)}d`],
+    ['RITES', formatNumber(snapshot?.totalCompletions)],
+    ['POWER', `${formatNumber(snapshot?.currentEchoPower)}x`],
+    ['ASSETS', `${heldAssets.length}/3`],
+  ] as const;
+
+  statItems.forEach(([label, value], index) => {
+    const x = 132 + index * 162;
+
+    fillRoundedRect(context, x, 506, 132, 72, 18, 'rgba(255, 248, 230, 0.38)');
+    context.fillStyle = '#2f1f15';
+    context.font = '900 27px Arial, sans-serif';
+    context.fillText(value, x + 16, 538);
+
+    context.fillStyle = '#7b3f23';
+    context.font = '900 14px Arial, sans-serif';
+    context.fillText(label, x + 16, 562);
+  });
+
+  context.fillStyle = '#7b3f23';
+  context.font = '900 20px Arial, sans-serif';
+  context.fillText('We move not by leaps. We move by stillness.', 718, 544);
+
+  context.fillStyle = '#2f1f15';
+  context.font = '900 22px Arial, sans-serif';
+  context.fillText('toby-atlas.vercel.app', 718, 574);
+
+  return canvasToBlob(canvas);
+}
+
 export function TobyworldPondPassport() {
   const [data, setData] = useState<PassportResponse | null>(null);
   const [contextUser, setContextUser] = useState<MiniAppUserContext | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRerolling, setIsRerolling] = useState(false);
   const [isSupporting, setIsSupporting] = useState(false);
+  const [isCreatingImage, setIsCreatingImage] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [freshInkKey, setFreshInkKey] = useState(0);
   const [pfpFailed, setPfpFailed] = useState(false);
@@ -371,19 +693,16 @@ export function TobyworldPondPassport() {
   const pfpUrl = !pfpFailed ? contextUser?.pfpUrl : undefined;
   const photoSrc = pfpUrl || (!frogImageFailed ? fallbackFrogImage : undefined);
 
-  const assetReadContracts = useMemo(() => {
-    if (!isConnected || !address) return [] as const;
+  const assetReadContracts = useMemo<readonly AssetReadContract[]>(() => {
+    if (!isConnected || !address) return [];
 
-    return TOBYWORLD_SWAP_TOKENS.map(
-      (token) =>
-        ({
-          address: token.address,
-          abi: ERC20_BALANCE_ABI,
-          functionName: 'balanceOf',
-          args: [address],
-          chainId: BASE_CHAIN_ID,
-        }) as const,
-    );
+    return TOBYWORLD_SWAP_TOKENS.map((token) => ({
+      address: token.address,
+      abi: ERC20_BALANCE_ABI,
+      functionName: 'balanceOf',
+      args: [address] as const,
+      chainId: BASE_CHAIN_ID,
+    }));
   }, [address, isConnected]);
 
   const { data: assetReads, isFetching: isCheckingAssets } = useReadContracts({
@@ -668,6 +987,59 @@ export function TobyworldPondPassport() {
     setNotice(copied ? 'Passport share text copied.' : persona.shareText);
   }
 
+  async function sharePassportImage() {
+    if (!persona) return;
+
+    try {
+      setIsCreatingImage(true);
+      setNotice(null);
+
+      const blob = await createPassportImageBlob({
+        persona,
+        snapshot,
+        contextUser,
+        address,
+        photoSrc,
+        heldAssets,
+        source: data?.source,
+      });
+
+      const file = new File([blob], 'tobyworld-pond-passport.png', {
+        type: 'image/png',
+      });
+
+      const shareNavigator = navigator as FileShareNavigator;
+
+      if (shareNavigator.canShare?.({ files: [file] }) && shareNavigator.share) {
+        await shareNavigator.share({
+          title: 'Tobyworld Pond Passport',
+          text: persona.shareText,
+          files: [file],
+        });
+
+        setNotice('Passport image share opened.');
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = objectUrl;
+      link.download = 'tobyworld-pond-passport.png';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+
+      setNotice('Passport image downloaded.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to create passport image.');
+    } finally {
+      setIsCreatingImage(false);
+    }
+  }
+
   return (
     <section className="pond-passport" aria-label="Tobyworld Pond Passport">
       <div className="pond-passport-glow" aria-hidden="true" />
@@ -857,6 +1229,10 @@ export function TobyworldPondPassport() {
 
         <button type="button" onClick={() => void shareToX()} disabled={!persona}>
           X
+        </button>
+
+        <button type="button" onClick={() => void sharePassportImage()} disabled={!persona || isCreatingImage}>
+          {isCreatingImage ? 'Making…' : 'Image'}
         </button>
 
         <button type="button" onClick={() => void copyPassport()} disabled={!persona}>
