@@ -15,8 +15,12 @@ export type TobyworldSwapToken = {
 
 export const BASE_NATIVE_TOKEN_CAIP19 = 'eip155:8453/native';
 
+function normalizeAddress(address: `0x${string}`) {
+  return address.toLowerCase() as `0x${string}`;
+}
+
 function getBaseErc20Caip19(address: `0x${string}`) {
-  return `eip155:8453/erc20:${address}`;
+  return `eip155:8453/erc20:${normalizeAddress(address)}`;
 }
 
 export const TOBYWORLD_SWAP_TOKENS = [
@@ -25,7 +29,7 @@ export const TOBYWORLD_SWAP_TOKENS = [
     name: 'Toby',
     symbol: '$toby',
     loreName: 'The Pond Guardian',
-    address: '0xb8d98a102b0079b69ffbc760c8d857a31653e56e',
+    address: normalizeAddress('0xb8d98a102b0079b69ffbc760c8d857a31653e56e'),
     caip19Id: getBaseErc20Caip19('0xb8d98a102b0079b69ffbc760c8d857a31653e56e'),
     imageSrc: '/images/atlas/toby-pond-guardian.png',
     accent: 'blue',
@@ -40,7 +44,7 @@ export const TOBYWORLD_SWAP_TOKENS = [
     name: 'Taboshi',
     symbol: '$Taboshi',
     loreName: 'The Leaf Bloom',
-    address: '0x3A1a33cf4553Db61F0db2c1e1721CD480b02789f',
+    address: normalizeAddress('0x3A1a33cf4553Db61F0db2c1e1721CD480b02789f'),
     caip19Id: getBaseErc20Caip19('0x3A1a33cf4553Db61F0db2c1e1721CD480b02789f'),
     imageSrc: '/images/atlas/taboshi-leaf.png',
     accent: 'green',
@@ -48,14 +52,14 @@ export const TOBYWORLD_SWAP_TOKENS = [
     description: 'The rare bloom of the pond. Growth, patience, and the garden path.',
     role: 'The leaf grows quietly.',
     tokenDetailsUrl:
-      'https://basescan.org/token/0x3A1a33cf4553Db61F0db2c1e1721CD480b02789f',
+      'https://basescan.org/token/0x3a1a33cf4553db61f0db2c1e1721cd480b02789f',
   },
   {
     id: 'patience',
     name: 'Patience',
     symbol: '$Patience',
     loreName: 'The Red Grain',
-    address: '0x6D96f18F00B815B2109A3766E79F6A7aD7785624',
+    address: normalizeAddress('0x6D96f18F00B815B2109A3766E79F6A7aD7785624'),
     caip19Id: getBaseErc20Caip19('0x6D96f18F00B815B2109A3766E79F6A7aD7785624'),
     imageSrc: '/images/atlas/patience-grain.png',
     accent: 'red',
@@ -63,7 +67,7 @@ export const TOBYWORLD_SWAP_TOKENS = [
     description: 'The first ripple. The red triangle. The discipline before the bloom.',
     role: 'The grain falls first.',
     tokenDetailsUrl:
-      'https://basescan.org/token/0x6D96f18F00B815B2109A3766E79F6A7aD7785624',
+      'https://basescan.org/token/0x6d96f18f00b815b2109a3766e79f6a7ad7785624',
   },
 ] as const satisfies readonly TobyworldSwapToken[];
 
