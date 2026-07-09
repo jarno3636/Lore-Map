@@ -145,14 +145,25 @@ function getRelicStatusCopy({
   claimed,
   locked,
   remaining,
+  canReadBalances,
 }: {
   claimed: boolean;
   locked: boolean;
   remaining: number;
+  canReadBalances: boolean;
 }) {
   if (claimed) return 'This wallet holds the relic.';
   if (locked) return `${formatMilestoneNumber(remaining)} weighted echoes remain.`;
+  if (!canReadBalances) return 'Unlocked. Connect wallet to check claim status.';
   return 'Unlocked for eligible frogs.';
+}
+
+function toBigIntBalance(value: unknown) {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.floor(value));
+  if (typeof value === 'string' && value.trim()) return BigInt(value);
+
+  return ZERO_BIGINT;
 }
 
 export function MilestoneBadges() {
@@ -186,13 +197,17 @@ export function MilestoneBadges() {
   const chainName = getMilestoneChainName();
   const multiplierCap = data.multiplier?.cap ?? 3;
 
+  const canReadBalances = Boolean(isConnected && address && MILESTONE_RELICS_ADDRESS);
+  const isWrongChain = Boolean(isConnected && chainId && chainId !== MILESTONE_CHAIN_ID);
+  const isBusy = isWriting || isConfirming;
+
   const nextProgress = useMemo(
     () => getMilestoneProgress(totalEchoes, nextMilestone.threshold),
     [nextMilestone.threshold, totalEchoes],
   );
 
   const balanceReadContracts = useMemo(() => {
-    if (!address || !MILESTONE_RELICS_ADDRESS) return [];
+    if (!canReadBalances || !address || !MILESTONE_RELICS_ADDRESS) return [];
 
     return data.milestones.map((milestone) => ({
       address: MILESTONE_RELICS_ADDRESS,
@@ -201,7 +216,7 @@ export function MilestoneBadges() {
       args: [address, BigInt(milestone.tokenId)] as const,
       chainId: MILESTONE_CHAIN_ID,
     }));
-  }, [address, data.milestones]);
+  }, [address, canReadBalances, data.milestones]);
 
   const {
     data: balanceReads,
@@ -210,20 +225,26 @@ export function MilestoneBadges() {
   } = useReadContracts({
     contracts: balanceReadContracts,
     query: {
-      enabled: balanceReadContracts.length > 0,
-      refetchInterval: 20_000,
+      enabled: canReadBalances && balanceReadContracts.length > 0,
+      refetchInterval: canReadBalances ? 20_000 : false,
     },
   });
 
   const claimedTokenIds = useMemo(() => {
     const claimed = new Set<number>();
 
-    balanceReads?.forEach((read, index) => {
+    if (!canReadBalances || !Array.isArray(balanceReads)) {
+      return claimed;
+    }
+
+    balanceReads.forEach((read, index) => {
       const tokenId = data.milestones[index]?.tokenId;
 
-      if (!tokenId || read.status !== 'success') return;
+      if (!tokenId) return;
+      if (!read || read.status !== 'success') return;
+      if (typeof read.result === 'undefined' || read.result === null) return;
 
-      const balance = read.result as bigint;
+      const balance = toBigIntBalance(read.result);
 
       if (balance > ZERO_BIGINT) {
         claimed.add(tokenId);
@@ -231,10 +252,7 @@ export function MilestoneBadges() {
     });
 
     return claimed;
-  }, [balanceReads, data.milestones]);
-
-  const isWrongChain = Boolean(isConnected && chainId && chainId !== MILESTONE_CHAIN_ID);
-  const isBusy = isWriting || isConfirming;
+  }, [balanceReads, canReadBalances, data.milestones]);
 
   const fetchMilestones = useCallback(async () => {
     setIsLoading(true);
@@ -273,9 +291,13 @@ export function MilestoneBadges() {
 
     setNotice('Relic claimed. The pond has written your mark onchain.');
     setPendingTokenId(null);
+
     void fetchMilestones();
-    void refetchBalances();
-  }, [fetchMilestones, isConfirmed, receipt, refetchBalances]);
+
+    if (canReadBalances) {
+      void refetchBalances();
+    }
+  }, [canReadBalances, fetchMilestones, isConfirmed, receipt, refetchBalances]);
 
   function connectWallet() {
     setNotice(null);
@@ -431,7 +453,13 @@ export function MilestoneBadges() {
                     {isSwitching ? 'Switching…' : `Switch to ${chainName}`}
                   </button>
                 ) : (
-                  <button type="button" onClick={() => void refetchBalances()}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (canReadBalances) void refetchBalances();
+                    }}
+                    disabled={!canReadBalances}
+                  >
                     {isReadingBalances ? 'Reading…' : 'Refresh Relics'}
                   </button>
                 )}
@@ -519,6 +547,7 @@ export function MilestoneBadges() {
             claimed,
             locked,
             remaining: milestone.progress.remaining,
+            canReadBalances,
           });
 
           return (
@@ -557,7 +586,7 @@ export function MilestoneBadges() {
 
               <button
                 type="button"
-                disabled={locked || claimed || claiming || isWrongChain}
+                disabled={locked || claimed || claiming}
                 onClick={() => void handleClaim(milestone)}
               >
                 {claimed
@@ -568,7 +597,9 @@ export function MilestoneBadges() {
                       ? 'Locked'
                       : isWrongChain
                         ? `Switch to ${chainName}`
-                        : 'Claim Relic'}
+                        : address
+                          ? 'Claim Relic'
+                          : 'Connect to Claim'}
               </button>
             </article>
           );
