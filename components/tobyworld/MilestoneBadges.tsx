@@ -34,10 +34,18 @@ type MilestoneWithProgress = TobyworldMilestone & {
   };
 };
 
+type MultiplierStatus = {
+  cap: number;
+  nextCapAt: number | null;
+  nextCap: number | null;
+};
+
 type MilestonesResponse = {
   totalEchoes: number;
+  totalRites?: number;
   nextMilestone: TobyworldMilestone;
   milestones: MilestoneWithProgress[];
+  multiplier?: MultiplierStatus;
   error?: string;
 };
 
@@ -52,8 +60,18 @@ type ClaimResponse = {
   signature: `0x${string}`;
   contractAddress: `0x${string}`;
   chainId: number;
+  signerAddress?: `0x${string}`;
+  expiresInSeconds?: number;
+  totalEchoes?: number;
+  totalRites?: number;
+  userRiteCount?: number;
+  userEchoPower?: number;
+  userHighestEchoPower?: number;
   milestone?: {
+    id?: number;
+    tokenId?: number;
     title: string;
+    threshold?: number;
     symbol: string;
     imageSrc: string;
   };
@@ -91,7 +109,13 @@ function getBoundQuickAuthFetch() {
 function getFallbackData(): MilestonesResponse {
   return {
     totalEchoes: 0,
+    totalRites: 0,
     nextMilestone: TOBYWORLD_MILESTONES[0],
+    multiplier: {
+      cap: 3,
+      nextCapAt: 1017,
+      nextCap: 6,
+    },
     milestones: TOBYWORLD_MILESTONES.map((milestone) => ({
       ...milestone,
       progress: getMilestoneProgress(0, milestone.threshold),
@@ -101,6 +125,34 @@ function getFallbackData(): MilestonesResponse {
 
 function shortenAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function getCapCopy(multiplier?: MultiplierStatus) {
+  if (!multiplier) {
+    return 'Max 3x echo power active.';
+  }
+
+  if (!multiplier.nextCapAt || !multiplier.nextCap) {
+    return `Max ${multiplier.cap}x echo power active. Final cap reached.`;
+  }
+
+  return `Max ${multiplier.cap}x echo power active. ${multiplier.nextCap}x opens at ${formatMilestoneNumber(
+    multiplier.nextCapAt,
+  )} weighted echoes.`;
+}
+
+function getRelicStatusCopy({
+  claimed,
+  locked,
+  remaining,
+}: {
+  claimed: boolean;
+  locked: boolean;
+  remaining: number;
+}) {
+  if (claimed) return 'This wallet holds the relic.';
+  if (locked) return `${formatMilestoneNumber(remaining)} weighted echoes remain.`;
+  return 'Unlocked for eligible frogs.';
 }
 
 export function MilestoneBadges() {
@@ -129,8 +181,10 @@ export function MilestoneBadges() {
   });
 
   const totalEchoes = data.totalEchoes;
+  const totalRites = data.totalRites ?? totalEchoes;
   const nextMilestone = data.nextMilestone;
   const chainName = getMilestoneChainName();
+  const multiplierCap = data.multiplier?.cap ?? 3;
 
   const nextProgress = useMemo(
     () => getMilestoneProgress(totalEchoes, nextMilestone.threshold),
@@ -143,7 +197,7 @@ export function MilestoneBadges() {
     return data.milestones.map((milestone) => ({
       address: MILESTONE_RELICS_ADDRESS,
       abi: MILESTONE_RELICS_ABI,
-      functionName: 'balanceOf',
+      functionName: 'balanceOf' as const,
       args: [address, BigInt(milestone.tokenId)] as const,
       chainId: MILESTONE_CHAIN_ID,
     }));
@@ -262,7 +316,7 @@ export function MilestoneBadges() {
       setNotice(
         `${milestone.title} is still locked. ${formatMilestoneNumber(
           milestone.progress.remaining,
-        )} echoes remain.`,
+        )} weighted echoes remain.`,
       );
       return;
     }
@@ -329,7 +383,11 @@ export function MilestoneBadges() {
 
       sent = true;
       setLastHash(hash);
-      setNotice('Claim sent. Confirming your relic onchain…');
+      setNotice(
+        claimData.userEchoPower
+          ? `Claim sent. Your latest echo power is ${claimData.userEchoPower}x. Confirming onchain…`
+          : 'Claim sent. Confirming your relic onchain…',
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The claim did not complete.');
     } finally {
@@ -350,8 +408,8 @@ export function MilestoneBadges() {
           <p>MILESTONE RELICS</p>
           <h2>Echoes become relics.</h2>
           <span>
-            Every Daily Rite moves the pond toward claimable Tobyworld relics.
-            The community unlocks them together. Your wallet claims them onchain.
+            Daily Rites now carry echo power. Streaks can make one rite count for more,
+            and the community unlocks higher power caps together.
           </span>
         </div>
 
@@ -422,8 +480,32 @@ export function MilestoneBadges() {
             <small>
               {nextProgress.unlocked
                 ? 'Unlocked. Eligible frogs may claim.'
-                : `${formatMilestoneNumber(nextProgress.remaining)} echoes remain.`}
+                : `${formatMilestoneNumber(nextProgress.remaining)} weighted echoes remain.`}
             </small>
+
+            <div className="milestone-multiplier-strip">
+              <span>
+                <b>{multiplierCap}x</b>
+                current max power
+              </span>
+
+              <span>
+                <b>{formatMilestoneNumber(totalRites)}</b>
+                rites completed
+              </span>
+
+              <span>
+                <b>{data.multiplier?.nextCap ? `${data.multiplier.nextCap}x` : 'MAX'}</b>
+                {data.multiplier?.nextCapAt
+                  ? `opens at ${formatMilestoneNumber(data.multiplier.nextCapAt)}`
+                  : 'cap reached'}
+              </span>
+            </div>
+          </div>
+
+          <div className="milestone-power-note">
+            <span>✦</span>
+            <p>{getCapCopy(data.multiplier)}</p>
           </div>
         </div>
       </article>
@@ -433,6 +515,11 @@ export function MilestoneBadges() {
           const claimed = claimedTokenIds.has(milestone.tokenId);
           const claiming = pendingTokenId === milestone.tokenId || isBusy;
           const locked = !milestone.progress.unlocked;
+          const statusCopy = getRelicStatusCopy({
+            claimed,
+            locked,
+            remaining: milestone.progress.remaining,
+          });
 
           return (
             <article
@@ -460,13 +547,7 @@ export function MilestoneBadges() {
                     {formatMilestoneNumber(totalEchoes)} /{' '}
                     {formatMilestoneNumber(milestone.threshold)}
                   </strong>
-                  <small>
-                    {claimed
-                      ? 'In wallet'
-                      : locked
-                        ? `${formatMilestoneNumber(milestone.progress.remaining)} remain`
-                        : 'Unlocked'}
-                  </small>
+                  <small>{statusCopy}</small>
                 </div>
 
                 <div className="milestone-relic-mini-track">
