@@ -4,7 +4,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
-type NavAccent = 'pond' | 'red' | 'green' | 'blue' | 'gold' | 'relic' | 'swap';
+type NavAccent =
+  | 'pond'
+  | 'red'
+  | 'green'
+  | 'blue'
+  | 'gold'
+  | 'relic'
+  | 'swap'
+  | 'passport';
 
 type NavItem = {
   label: string;
@@ -15,66 +23,101 @@ type NavItem = {
   accent: NavAccent;
 };
 
-const navItems: NavItem[] = [
-  {
-    label: 'Pond',
-    href: '/',
-    matchPath: '/',
-    symbol: '🐸',
-    accent: 'pond',
-  },
-  {
-    label: 'Swap',
-    href: '/#swap-gateway',
-    matchPath: '/',
-    matchHash: 'swap-gateway',
-    symbol: '⇄',
-    accent: 'swap',
-  },
-  {
-    label: 'Rite',
-    href: '/#daily-rite',
-    matchPath: '/',
-    matchHash: 'daily-rite',
-    symbol: '△',
-    accent: 'red',
-  },
-  {
-    label: 'Atlas',
-    href: '/#atlas',
-    matchPath: '/',
-    matchHash: 'atlas',
-    symbol: '☷',
-    accent: 'blue',
-  },
-  {
-    label: 'Role',
-    href: '/#pond-role',
-    matchPath: '/',
-    matchHash: 'pond-role',
-    symbol: '✦',
-    accent: 'gold',
-  },
-  {
-    label: 'Relics',
-    href: '/milestones',
-    matchPath: '/milestones',
-    symbol: '🏺',
-    accent: 'relic',
-  },
-  {
-    label: 'Shrine',
-    href: '/community',
-    matchPath: '/community',
-    symbol: '🌀',
-    accent: 'green',
-  },
+const navGroups: NavItem[][] = [
+  [
+    {
+      label: 'Pond',
+      href: '/',
+      matchPath: '/',
+      symbol: '🐸',
+      accent: 'pond',
+    },
+    {
+      label: 'Swap',
+      href: '/#swap-gateway',
+      matchPath: '/',
+      matchHash: 'swap-gateway',
+      symbol: '⇄',
+      accent: 'swap',
+    },
+    {
+      label: 'Rite',
+      href: '/#daily-rite',
+      matchPath: '/',
+      matchHash: 'daily-rite',
+      symbol: '△',
+      accent: 'red',
+    },
+    {
+      label: 'Passport',
+      href: '/#pond-passport',
+      matchPath: '/',
+      matchHash: 'pond-passport',
+      symbol: '🪪',
+      accent: 'passport',
+    },
+  ],
+  [
+    {
+      label: 'Atlas',
+      href: '/#atlas',
+      matchPath: '/',
+      matchHash: 'atlas',
+      symbol: '☷',
+      accent: 'blue',
+    },
+    {
+      label: 'Role',
+      href: '/#pond-role',
+      matchPath: '/',
+      matchHash: 'pond-role',
+      symbol: '✦',
+      accent: 'gold',
+    },
+    {
+      label: 'Relics',
+      href: '/milestones',
+      matchPath: '/milestones',
+      symbol: '🏺',
+      accent: 'relic',
+    },
+    {
+      label: 'Shrine',
+      href: '/community',
+      matchPath: '/community',
+      symbol: '🌀',
+      accent: 'green',
+    },
+  ],
 ];
+
+const navItems = navGroups.flat();
 
 function getCurrentHash() {
   if (typeof window === 'undefined') return '';
 
   return window.location.hash.replace('#', '');
+}
+
+function isItemActive(item: NavItem, pathname: string, hash: string) {
+  const isHashItem = Boolean(item.matchHash);
+
+  const isHashActive =
+    item.matchPath === pathname &&
+    isHashItem &&
+    hash === item.matchHash;
+
+  const isRootActive =
+    item.matchPath === '/' &&
+    item.href === '/' &&
+    pathname === '/' &&
+    !hash;
+
+  const isPageActive =
+    item.matchPath !== '/' &&
+    pathname === item.matchPath;
+
+  return isHashActive || isRootActive || isPageActive;
 }
 
 export function TobyworldNav() {
@@ -114,15 +157,7 @@ export function TobyworldNav() {
   }, [pathname]);
 
   const activeLabel = useMemo(() => {
-    const active = navItems.find((item) => {
-      if (item.matchPath !== pathname) return false;
-
-      if (item.matchHash) {
-        return hash === item.matchHash;
-      }
-
-      return pathname === item.matchPath && !hash;
-    });
+    const active = navItems.find((item) => isItemActive(item, pathname, hash));
 
     return active?.label ?? (pathname === '/' ? 'Pond' : '');
   }, [hash, pathname]);
@@ -145,43 +180,32 @@ export function TobyworldNav() {
         </Link>
 
         <div className="toby-nav-links" aria-label="Primary Tobyworld links">
-          {navItems.map((item) => {
-            const isHashItem = Boolean(item.matchHash);
+          {navGroups.map((group, groupIndex) => (
+            <div className="toby-nav-link-row" key={`nav-row-${groupIndex}`}>
+              {group.map((item) => {
+                const active = isItemActive(item, pathname, hash);
 
-            const isHashActive =
-              item.matchPath === pathname &&
-              isHashItem &&
-              hash === item.matchHash;
-
-            const isRootActive =
-              item.matchPath === '/' &&
-              item.href === '/' &&
-              pathname === '/' &&
-              !hash;
-
-            const isPageActive =
-              item.matchPath !== '/' &&
-              pathname === item.matchPath;
-
-            const active = isHashActive || isRootActive || isPageActive;
-
-            return (
-              <Link
-                href={item.href}
-                className={`toby-nav-link accent-${item.accent} ${active ? 'is-active' : ''}`}
-                key={item.href}
-                aria-current={active ? 'page' : undefined}
-                onClick={() => {
-                  window.setTimeout(() => {
-                    setHash(getCurrentHash());
-                  }, 40);
-                }}
-              >
-                <span className="toby-nav-symbol">{item.symbol}</span>
-                <b>{item.label}</b>
-              </Link>
-            );
-          })}
+                return (
+                  <Link
+                    href={item.href}
+                    className={`toby-nav-link accent-${item.accent} ${
+                      active ? 'is-active' : ''
+                    }`}
+                    key={item.href}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => {
+                      window.setTimeout(() => {
+                        setHash(getCurrentHash());
+                      }, 40);
+                    }}
+                  >
+                    <span className="toby-nav-symbol">{item.symbol}</span>
+                    <b>{item.label}</b>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </nav>
