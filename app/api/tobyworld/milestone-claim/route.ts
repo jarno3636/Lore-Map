@@ -4,6 +4,7 @@ import { getAddress, isAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { requireFarcasterFid } from '@/lib/farcaster/quick-auth';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { getTobyworldEchoTotals } from '@/lib/tobyworld-echo-totals';
 import { getMilestoneByTokenId, getMilestoneProgress } from '@/lib/tobyworld-milestones';
 import {
   MILESTONE_CHAIN_ID,
@@ -18,6 +19,12 @@ export const runtime = 'nodejs';
 type ClaimBody = {
   tokenId?: number | string;
   walletAddress?: string;
+};
+
+type DailyRiteClaimRow = {
+  total_completions: number | null;
+  current_echo_power: number | null;
+  highest_echo_power: number | null;
 };
 
 function json(data: unknown, status = 200) {
@@ -79,34 +86,30 @@ async function readBody(request: Request) {
   }
 }
 
-async function getTotalEchoes() {
+async function getEchoTotals() {
   const supabase = getSupabaseAdmin();
 
-  const { count, error } = await supabase
-    .from('tobyworld_rite_events')
-    .select('id', { count: 'exact', head: true });
-
-  if (error) {
-    throw new Error(`Milestone count failed: ${error.message}`);
-  }
-
-  return count ?? 0;
+  return getTobyworldEchoTotals(supabase);
 }
 
-async function getUserRiteCount(fid: number) {
+async function getUserRiteProfile(fid: number) {
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
     .from('tobyworld_daily_rites')
-    .select('total_completions')
+    .select('total_completions, current_echo_power, highest_echo_power')
     .eq('fid', fid)
-    .maybeSingle<{ total_completions: number | null }>();
+    .maybeSingle<DailyRiteClaimRow>();
 
   if (error) {
     throw new Error(`Daily rite profile failed: ${error.message}`);
   }
 
-  return data?.total_completions ?? 0;
+  return {
+    totalCompletions: data?.total_completions ?? 0,
+    currentEchoPower: data?.current_echo_power ?? 1,
+    highestEchoPower: data?.highest_echo_power ?? 1,
+  };
 }
 
 export async function POST(request: Request) {
@@ -145,9 +148,9 @@ export async function POST(request: Request) {
       return json({ error: 'Unknown milestone relic.', code: 'unknown_relic' }, 404);
     }
 
-    const [totalEchoes, userRiteCount] = await Promise.all([
-      getTotalEchoes(),
-      getUserRiteCount(auth.fid),
+    const [{ totalEchoes, totalRites }, userProfile] = await Promise.all([
+      getEchoTotals(),
+      getUserRiteProfile(auth.fid),
     ]);
 
     const progress = getMilestoneProgress(totalEchoes, milestone.threshold);
@@ -157,9 +160,10 @@ export async function POST(request: Request) {
         {
           error: `${milestone.title} is still locked. ${progress.remaining.toLocaleString(
             'en-US',
-          )} echoes remain.`,
+          )} weighted echoes remain.`,
           code: 'relic_locked',
           totalEchoes,
+          totalRites,
           requiredEchoes: milestone.threshold,
           remaining: progress.remaining,
           milestone,
@@ -168,12 +172,13 @@ export async function POST(request: Request) {
       );
     }
 
-    if (userRiteCount <= 0) {
+    if (userProfile.totalCompletions <= 0) {
       return json(
         {
           error: 'Complete at least one Daily Rite before claiming a relic.',
           code: 'daily_rite_required',
           totalEchoes,
+          totalRites,
           milestone,
         },
         403,
@@ -224,8 +229,13 @@ export async function POST(request: Request) {
       chainId: MILESTONE_CHAIN_ID,
       signerAddress: signer.address,
       expiresInSeconds: 900,
+
       totalEchoes,
-      userRiteCount,
+      totalRites,
+      userRiteCount: userProfile.totalCompletions,
+      userEchoPower: userProfile.currentEchoPower,
+      userHighestEchoPower: userProfile.highestEchoPower,
+
       milestone: {
         id: milestone.id,
         tokenId: milestone.tokenId,
