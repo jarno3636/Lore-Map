@@ -46,6 +46,7 @@ export async function POST(request: Request) {
         {
           error: verified.error,
           code: 'wallet_signature_required',
+          heldAssets: 'heldAssets' in verified ? verified.heldAssets : [],
         },
         401,
       );
@@ -73,10 +74,11 @@ export async function POST(request: Request) {
       riteDate: today,
       alreadySupportedToday: error?.code === '23505',
       echoPower: 1,
+      heldAssets: verified.heldAssets,
       message:
         error?.code === '23505'
-          ? 'This wallet already supported today’s rite.'
-          : 'The wallet has supported today’s pond rite.',
+          ? 'This wallet already supported today’s rite. Passport still stamped.'
+          : 'The wallet has supported today’s pond rite. Passport stamped.',
     });
   } catch (error) {
     console.error('Wallet support rite failed:', error);
