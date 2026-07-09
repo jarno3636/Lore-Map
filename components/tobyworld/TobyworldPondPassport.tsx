@@ -41,9 +41,21 @@ type PassportResponse = {
   };
 };
 
+type MiniAppUserContext = {
+  fid?: number;
+  username?: string;
+  displayName?: string;
+  pfpUrl?: string;
+};
+
+type MiniAppContext = {
+  user?: MiniAppUserContext;
+};
+
 type QuickAuthFetch = typeof fetch;
 
 type PassportSdk = typeof sdk & {
+  context?: MiniAppContext | Promise<MiniAppContext>;
   quickAuth?: {
     fetch?: QuickAuthFetch;
   };
@@ -69,14 +81,22 @@ function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat('en-US').format(value ?? 0);
 }
 
-function getDisplayName(snapshot?: PassportSnapshot) {
-  if (!snapshot) return 'Unstamped Frog';
-  return snapshot.displayName || snapshot.username || `FID ${snapshot.fid}`;
+function getDisplayName(snapshot?: PassportSnapshot, contextUser?: MiniAppUserContext | null) {
+  if (contextUser?.displayName) return contextUser.displayName;
+  if (snapshot?.displayName) return snapshot.displayName;
+  if (contextUser?.username) return contextUser.username;
+  if (snapshot?.username) return snapshot.username;
+  if (snapshot?.fid) return `FID ${snapshot.fid}`;
+
+  return 'Unstamped Frog';
 }
 
-function getHandle(snapshot?: PassportSnapshot) {
-  if (!snapshot?.username) return 'Tobyworld traveler';
-  return `@${snapshot.username}`;
+function getHandle(snapshot?: PassportSnapshot, contextUser?: MiniAppUserContext | null) {
+  const username = contextUser?.username || snapshot?.username;
+
+  if (!username) return 'Tobyworld traveler';
+
+  return `@${username}`;
 }
 
 function getIssuedDate(value?: string) {
@@ -89,9 +109,35 @@ function getIssuedDate(value?: string) {
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
     timeZone: 'UTC',
   });
+}
+
+function getSourceLabel(source?: string) {
+  if (!source) return 'Not loaded';
+  if (source === 'gemini') return 'AI stamp';
+  if (source.startsWith('fallback')) return 'Local stamp';
+
+  return 'Pond stamp';
+}
+
+function getPassportStateLabel({
+  isLoading,
+  isRerolling,
+  data,
+}: {
+  isLoading: boolean;
+  isRerolling: boolean;
+  data: PassportResponse | null;
+}) {
+  if (isLoading) return 'Loading passport…';
+  if (isRerolling) return 'Rerolling stamp…';
+  if (data?.persona) {
+    const rerolls = data.limits?.rerollsRemaining ?? 0;
+    return `Loaded · ${rerolls} reroll${rerolls === 1 ? '' : 's'} left`;
+  }
+
+  return 'Waiting for pond stamp';
 }
 
 async function copyText(value: string) {
@@ -107,21 +153,25 @@ async function copyText(value: string) {
 
 export function TobyworldPondPassport() {
   const [data, setData] = useState<PassportResponse | null>(null);
+  const [contextUser, setContextUser] = useState<MiniAppUserContext | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRerolling, setIsRerolling] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [freshInkKey, setFreshInkKey] = useState(0);
+  const [pfpFailed, setPfpFailed] = useState(false);
 
   const persona = data?.persona;
   const snapshot = data?.snapshot;
+  const pfpUrl = !pfpFailed ? contextUser?.pfpUrl : undefined;
 
   const stats = useMemo(
     () => [
       {
-        label: 'Current Streak',
+        label: 'Streak',
         value: `${formatNumber(snapshot?.streakCount)}d`,
       },
       {
-        label: 'Best Streak',
+        label: 'Best',
         value: `${formatNumber(snapshot?.bestStreak)}d`,
       },
       {
@@ -129,55 +179,92 @@ export function TobyworldPondPassport() {
         value: formatNumber(snapshot?.totalCompletions),
       },
       {
-        label: 'Echo Power',
+        label: 'Power',
         value: `${formatNumber(snapshot?.currentEchoPower)}x`,
       },
     ],
     [snapshot],
   );
 
-  const fetchPassport = useCallback(async (reroll = false) => {
-    const authFetch = getBoundQuickAuthFetch();
+  const statusLabel = getPassportStateLabel({
+    isLoading,
+    isRerolling,
+    data,
+  });
 
-    if (!authFetch) {
-      setNotice('Open in Farcaster to reveal your Pond Passport.');
-      return;
-    }
-
-    setNotice(null);
-
-    if (reroll) {
-      setIsRerolling(true);
-    } else {
-      setIsLoading(true);
-    }
-
+  const loadMiniAppContext = useCallback(async () => {
     try {
-      const response = await authFetch(`${getOrigin()}/api/tobyworld/pond-passport`, {
-        method: reroll ? 'POST' : 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const context = await Promise.resolve((sdk as PassportSdk).context);
 
-      const nextData = (await response.json()) as PassportResponse;
-
-      if (!response.ok) {
-        throw new Error(nextData.error || 'The pond refused to stamp the passport.');
+      if (context?.user) {
+        setContextUser(context.user);
       }
-
-      setData(nextData);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The passport ink ran.');
-    } finally {
-      setIsLoading(false);
-      setIsRerolling(false);
+    } catch {
+      setContextUser(null);
     }
   }, []);
 
+  const fetchPassport = useCallback(
+    async (reroll = false) => {
+      const authFetch = getBoundQuickAuthFetch();
+
+      if (!authFetch) {
+        setNotice('Open in Farcaster to reveal your Pond Passport.');
+        return;
+      }
+
+      const previousTitle = data?.persona?.title;
+
+      setNotice(null);
+
+      if (reroll) {
+        setIsRerolling(true);
+      } else {
+        setIsLoading(true);
+      }
+
+      try {
+        const response = await authFetch(`${getOrigin()}/api/tobyworld/pond-passport`, {
+          method: reroll ? 'POST' : 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const nextData = (await response.json()) as PassportResponse;
+
+        if (!response.ok) {
+          throw new Error(nextData.error || 'The pond refused to stamp the passport.');
+        }
+
+        setData(nextData);
+        setFreshInkKey((value) => value + 1);
+
+        if (reroll) {
+          const nextTitle = nextData.persona?.title;
+
+          setNotice(
+            nextTitle && nextTitle !== previousTitle
+              ? `New stamp loaded: ${nextTitle}.`
+              : 'Passport rerolled. The pond may have kept one detail because it liked it.',
+          );
+        } else {
+          setNotice(nextData.persona ? 'Passport loaded.' : null);
+        }
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'The passport ink ran.');
+      } finally {
+        setIsLoading(false);
+        setIsRerolling(false);
+      }
+    },
+    [data?.persona?.title],
+  );
+
   useEffect(() => {
+    void loadMiniAppContext();
     void fetchPassport(false);
-  }, [fetchPassport]);
+  }, [fetchPassport, loadMiniAppContext]);
 
   async function sharePassport() {
     if (!persona) return;
@@ -216,138 +303,120 @@ export function TobyworldPondPassport() {
   return (
     <section className="pond-passport" aria-label="Tobyworld Pond Passport">
       <div className="pond-passport-glow" aria-hidden="true" />
-      <div className="pond-passport-seal-bg" aria-hidden="true">
-        🐸
-      </div>
 
-      <header className="pond-passport-header">
+      <div className="pond-passport-toolbar">
         <div>
           <p>POND PASSPORT</p>
-          <h2>Official unofficial frog paperwork.</h2>
-          <span>
-            A daily identity stamp generated from your Tobyworld activity. The pond
-            reviews your file and produces a title, trait, warning, and questionable
-            travel clearance.
-          </span>
+          <span>{statusLabel}</span>
         </div>
 
-        <div className="pond-passport-limit">
-          <small>REROLLS</small>
-          <strong>{data?.limits?.rerollsRemaining ?? 2}</strong>
-          <span>left today</span>
+        <div className="pond-passport-toolbar-chip">
+          <strong>{getSourceLabel(data?.source)}</strong>
+          <small>{getIssuedDate(data?.generatedOn)}</small>
         </div>
-      </header>
+      </div>
 
-      <article className={`pond-passport-book ${persona ? 'is-ready' : 'is-loading'}`}>
-        <div className="pond-passport-book-spine" aria-hidden="true" />
+      <article
+        className={`pond-passport-card ${persona ? 'is-ready' : 'is-pending'}`}
+        key={freshInkKey}
+      >
+        <div className="pond-passport-watermark" aria-hidden="true">
+          POND
+        </div>
 
-        <section className="pond-passport-page pond-passport-page-left">
-          <div className="pond-passport-page-top">
-            <div>
-              <small>TOBYWORLD TRAVEL DOCUMENT</small>
-              <h3>Pond Passport</h3>
-            </div>
-
-            <span className="pond-passport-mini-seal">△🐸🍃</span>
-          </div>
-
-          <div className="pond-passport-id-zone">
-            <div className="pond-passport-photo">
+        <div className="pond-passport-card-head">
+          <div className="pond-passport-photo">
+            {pfpUrl ? (
+              <img
+                src={pfpUrl}
+                alt=""
+                aria-hidden="true"
+                onError={() => setPfpFailed(true)}
+              />
+            ) : (
               <span>🐸</span>
-              <i>HOLDER IMAGE</i>
+            )}
+          </div>
+
+          <div className="pond-passport-identity">
+            <small>ISSUED TO</small>
+            <h3>{getDisplayName(snapshot, contextUser)}</h3>
+            <p>
+              {getHandle(snapshot, contextUser)}
+              {snapshot?.fid ? ` · FID ${snapshot.fid}` : ''}
+            </p>
+          </div>
+
+          <div className="pond-passport-mini-stamp" aria-hidden="true">
+            △🐸🍃
+          </div>
+        </div>
+
+        <div className="pond-passport-title-block">
+          <small>POND TITLE</small>
+          <h2>{persona?.title ?? 'Awaiting pond stamp…'}</h2>
+          <p>{persona?.characteristic ?? 'The frog at the desk is still checking the file.'}</p>
+        </div>
+
+        <div className="pond-passport-trait-grid">
+          <div>
+            <small>HABIT</small>
+            <p>{persona?.strangeHabit ?? 'Pending.'}</p>
+          </div>
+
+          <div>
+            <small>WARNING</small>
+            <p>{persona?.pondWarning ?? 'Pending.'}</p>
+          </div>
+        </div>
+
+        <div className="pond-passport-stat-row">
+          {stats.map((stat) => (
+            <div key={stat.label}>
+              <strong>{stat.value}</strong>
+              <span>{stat.label}</span>
             </div>
+          ))}
+        </div>
 
-            <div className="pond-passport-id-lines">
-              <label>
-                Name
-                <strong>{getDisplayName(snapshot)}</strong>
-              </label>
-
-              <label>
-                Handle
-                <strong>{getHandle(snapshot)}</strong>
-              </label>
-
-              <label>
-                FID
-                <strong>{snapshot?.fid ?? 'Pending'}</strong>
-              </label>
-
-              <label>
-                Current Mark
-                <strong>{snapshot?.currentMark ?? 'Unstamped Frog'}</strong>
-              </label>
-            </div>
+        <div className="pond-passport-bottom-row">
+          <div>
+            <small>MARK</small>
+            <strong>{snapshot?.currentMark ?? 'Unstamped Frog'}</strong>
           </div>
 
-          <div className="pond-passport-machine-strip" aria-label="Passport machine line">
-            PND&lt;TOBYWORLD&lt;{snapshot?.fid ?? '000000'}&lt;&lt;STILLNESS&lt;BLOOM&lt;RETURN
-          </div>
-
-          <div className="pond-passport-stat-grid">
-            {stats.map((stat) => (
-              <div key={stat.label}>
-                <strong>{stat.value}</strong>
-                <span>{stat.label}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="pond-passport-page pond-passport-page-right">
-          <div className="pond-passport-stamp-header">
-            <small>ENTRY STAMP</small>
-            <strong>{getIssuedDate(data?.generatedOn)}</strong>
-          </div>
-
-          <div className="pond-passport-title-stamp">
-            <small>POND TITLE</small>
-            <h3>{persona?.title ?? 'Awaiting pond stamp…'}</h3>
-          </div>
-
-          <div className="pond-passport-trait-panel">
-            <small>CHARACTERISTIC</small>
-            <p>{persona?.characteristic ?? 'The frog at the desk is still checking the file.'}</p>
-          </div>
-
-          <div className="pond-passport-two-up">
-            <div>
-              <small>STRANGE HABIT</small>
-              <p>{persona?.strangeHabit ?? 'Pending.'}</p>
-            </div>
-
-            <div>
-              <small>POND WARNING</small>
-              <p>{persona?.pondWarning ?? 'Pending.'}</p>
-            </div>
-          </div>
-
-          <div className="pond-passport-visa-stamp">
+          <div className="pond-passport-approved">
             <span>{persona?.stamp ?? '△ · 🐸 · 🍃'}</span>
-            <b>APPROVED FOR POND ENTRY</b>
+            <b>APPROVED</b>
           </div>
-        </section>
+        </div>
       </article>
 
       <div className="pond-passport-actions">
-        <button type="button" onClick={() => void fetchPassport(false)} disabled={isLoading}>
-          {isLoading ? 'Stamping…' : persona ? 'Refresh Passport' : 'Reveal Passport'}
+        <button
+          type="button"
+          className="primary"
+          onClick={() => void fetchPassport(true)}
+          disabled={isRerolling || isLoading || !persona || (data?.limits?.rerollsRemaining ?? 0) <= 0}
+        >
+          {isRerolling ? 'Rerolling…' : 'Reroll Stamp'}
+        </button>
+
+        <button type="button" onClick={() => void sharePassport()} disabled={!persona}>
+          Cast
+        </button>
+
+        <button type="button" onClick={() => void copyPassport()} disabled={!persona}>
+          Copy
         </button>
 
         <button
           type="button"
-          onClick={() => void fetchPassport(true)}
-          disabled={isRerolling || !persona || (data?.limits?.rerollsRemaining ?? 0) <= 0}
+          className="ghost"
+          onClick={() => void fetchPassport(false)}
+          disabled={isLoading || isRerolling}
         >
-          {isRerolling ? 'Rerolling…' : 'Reroll Trait'}
-        </button>
-
-        <button type="button" onClick={() => void sharePassport()} disabled={!persona}>
-          Cast Passport
-        </button>
-
-        <button type="button" onClick={() => void copyPassport()} disabled={!persona}>
-          Copy Share Text
+          {isLoading ? 'Loading…' : 'Reload'}
         </button>
       </div>
 
