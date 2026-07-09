@@ -80,6 +80,8 @@ type WalletSupportResponse = {
   alreadySupportedToday?: boolean;
 };
 
+type TobyworldAsset = (typeof TOBYWORLD_SWAP_TOKENS)[number];
+
 const ERC20_BALANCE_ABI = [
   {
     type: 'function',
@@ -90,15 +92,46 @@ const ERC20_BALANCE_ABI = [
   },
 ] as const;
 
-const BASE_CHAIN_ID = 8453;
+const BASE_CHAIN_ID = 8453 as const;
 const REQUIRED_ASSET_COUNT = 2;
 
 const PASSPORT_FROG_BACKUPS = [
   '/images/passport/frog-lily-agent.png',
-  '/images/passport/frog-red-grain-cloak.png',
+  '/images/passport/frog-detective-mustache.png',
+  '/images/passport/frog-moon-wizard.png',
   '/images/passport/frog-leaf-scout.png',
-  '/images/passport/frog-gate-guard.png',
-  '/images/passport/frog-moon-ranger.png',
+  '/images/passport/frog-top-hat-gentleman.png',
+];
+
+const WALLET_TITLES = [
+  'Wallet Pond Inspector',
+  'Two-Asset Tadpole With Papers',
+  'Certified Ripple Supporter',
+  'Suspiciously Official Pond Visitor',
+  'Base Pond Stamp Holder',
+  'Unpaid Intern of the Lily Desk',
+];
+
+const WALLET_CHARACTERISTICS = [
+  'Signed one harmless message and immediately became part of the pond bureaucracy.',
+  'Carries enough Tobyworld energy to make the passport desk nod respectfully.',
+  'Supports the rite without asking why the frog has a clipboard.',
+  'Holds the required pond artifacts and now expects travel privileges.',
+  'Arrived by wallet, passed the vibe check, and received questionable clearance.',
+];
+
+const WALLET_HABITS = [
+  'Checks token balances like a frog checking pockets before a road trip.',
+  'Signs messages with the confidence of someone who read at least half the warning.',
+  'Keeps two pond artifacts nearby in case paperwork appears.',
+  'Pretends this is normal web behavior. It is not. It is pond behavior.',
+];
+
+const WALLET_WARNINGS = [
+  'May attempt to explain the passport desk to normal people.',
+  'Do not let this wallet near unattended lily pads.',
+  'Approved for pond entry, but still under frog observation.',
+  'No gas was spent, but dignity may have been lightly stamped.',
 ];
 
 function getOrigin() {
@@ -167,6 +200,7 @@ function getIssuedDate(value?: string) {
 function getSourceLabel(source?: string) {
   if (!source) return 'Not loaded';
   if (source === 'gemini') return 'AI stamp';
+  if (source === 'wallet') return 'Wallet stamp';
   if (source.startsWith('fallback')) return 'Local stamp';
 
   return 'Pond stamp';
@@ -190,19 +224,76 @@ function buildWalletSupportMessage(address: string) {
   ].join('\n');
 }
 
+function hashText(value: string) {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function pick<T>(items: readonly T[], seed: number) {
+  return items[Math.abs(seed) % items.length];
+}
+
+function createWalletSupporterPersona(address: string, heldAssets: TobyworldAsset[]): PondPersona {
+  const heldSymbols = heldAssets.map((asset) => asset.symbol).join(' + ');
+  const seed = hashText(`${address}:${heldSymbols}:${getTodayUtcDate()}`);
+
+  const title = pick(WALLET_TITLES, seed);
+  const characteristic = pick(WALLET_CHARACTERISTICS, seed >> 3);
+  const strangeHabit = pick(WALLET_HABITS, seed >> 6);
+  const pondWarning = pick(WALLET_WARNINGS, seed >> 9);
+  const stamp = pick(['△ · 🐸 · 🍃', '🐸 · ⇄ · ✦', '🍃 · 🐸 · 🪪', '✦ · 🐸 · △'], seed >> 12);
+
+  return {
+    title,
+    characteristic,
+    strangeHabit,
+    pondWarning,
+    stamp,
+    shareText: `My Tobyworld Web Supporter Passport has been stamped: ${title}. Held path: ${heldSymbols}. The pond remains professionally concerned. ${stamp}`,
+  };
+}
+
+function createWalletSupporterSnapshot(address: string): PassportSnapshot {
+  return {
+    fid: 0,
+    username: null,
+    displayName: `Wallet ${shortenAddress(address)}`,
+    currentMark: 'Web Supporter',
+    streakCount: 1,
+    bestStreak: 1,
+    totalCompletions: 1,
+    currentEchoPower: 1,
+    highestEchoPower: 1,
+    totalEchoes: 0,
+    totalRites: 1,
+  };
+}
+
 function getPassportStateLabel({
+  isConnected,
+  isCheckingAssets,
   isLoading,
   isRerolling,
   data,
   hasEnoughAssets,
   assetCount,
 }: {
+  isConnected: boolean;
+  isCheckingAssets: boolean;
   isLoading: boolean;
   isRerolling: boolean;
   data: PassportResponse | null;
   hasEnoughAssets: boolean;
   assetCount: number;
 }) {
+  if (!isConnected) return 'Wallet needed';
+  if (isCheckingAssets) return 'Checking wallet assets…';
   if (isLoading) return 'Loading passport…';
   if (isRerolling) return 'Rerolling stamp…';
 
@@ -211,8 +302,10 @@ function getPassportStateLabel({
   }
 
   if (data?.persona) {
-    const rerolls = data.limits?.rerollsRemaining ?? 0;
-    return `Loaded · ${rerolls} reroll${rerolls === 1 ? '' : 's'} left`;
+    const rerolls = data.source === 'wallet' ? 0 : data.limits?.rerollsRemaining ?? 0;
+    return data.source === 'wallet'
+      ? 'Loaded · Web supporter stamp'
+      : `Loaded · ${rerolls} reroll${rerolls === 1 ? '' : 's'} left`;
   }
 
   return 'Ready for pond stamp';
@@ -228,12 +321,7 @@ function toBigIntBalance(value: unknown) {
 
 function pickBackupFrogImage(seed: string | number | undefined) {
   const value = String(seed ?? 'pond');
-
-  let hash = 0;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash = Math.imul(31, hash) + value.charCodeAt(index);
-  }
+  const hash = hashText(value);
 
   return PASSPORT_FROG_BACKUPS[Math.abs(hash) % PASSPORT_FROG_BACKUPS.length];
 }
@@ -279,20 +367,23 @@ export function TobyworldPondPassport() {
   const persona = data?.persona;
   const snapshot = data?.snapshot;
 
-  const fallbackFrogImage = pickBackupFrogImage(snapshot?.fid ?? address);
+  const fallbackFrogImage = pickBackupFrogImage(snapshot?.fid || address);
   const pfpUrl = !pfpFailed ? contextUser?.pfpUrl : undefined;
   const photoSrc = pfpUrl || (!frogImageFailed ? fallbackFrogImage : undefined);
 
   const assetReadContracts = useMemo(() => {
-    if (!isConnected || !address) return [];
+    if (!isConnected || !address) return [] as const;
 
-    return TOBYWORLD_SWAP_TOKENS.map((token) => ({
-      address: token.address,
-      abi: ERC20_BALANCE_ABI,
-      functionName: 'balanceOf' as const,
-      args: [address] as const,
-      chainId: BASE_CHAIN_ID,
-    }));
+    return TOBYWORLD_SWAP_TOKENS.map(
+      (token) =>
+        ({
+          address: token.address,
+          abi: ERC20_BALANCE_ABI,
+          functionName: 'balanceOf',
+          args: [address],
+          chainId: BASE_CHAIN_ID,
+        }) as const,
+    );
   }, [address, isConnected]);
 
   const { data: assetReads, isFetching: isCheckingAssets } = useReadContracts({
@@ -318,7 +409,7 @@ export function TobyworldPondPassport() {
 
         return token;
       })
-      .filter((token): token is (typeof TOBYWORLD_SWAP_TOKENS)[number] => Boolean(token));
+      .filter((token): token is TobyworldAsset => Boolean(token));
   }, [assetReads]);
 
   const assetCount = heldAssets.length;
@@ -348,6 +439,8 @@ export function TobyworldPondPassport() {
   );
 
   const statusLabel = getPassportStateLabel({
+    isConnected,
+    isCheckingAssets,
     isLoading,
     isRerolling,
     data,
@@ -403,7 +496,7 @@ export function TobyworldPondPassport() {
 
       if (!authFetch) {
         setNotice(
-          'Wallet gate passed. To generate the full Farcaster passport, open in Farcaster. Web supporter passport support can use the Support Rite button.',
+          'Wallet gate passed. On web, press Support Rite to sign a free message and receive a Web Supporter Passport. No gas, no transaction, no token approval.',
         );
         return;
       }
@@ -504,9 +597,25 @@ export function TobyworldPondPassport() {
         throw new Error(result.error || 'Unable to support today’s rite.');
       }
 
+      const walletPersona = createWalletSupporterPersona(address, heldAssets);
+      const walletSnapshot = createWalletSupporterSnapshot(address);
+
+      setData({
+        ok: true,
+        persona: walletPersona,
+        snapshot: walletSnapshot,
+        source: 'wallet',
+        generatedOn: getTodayUtcDate(),
+        limits: {
+          rerollsRemaining: 0,
+          cooldownSeconds: 0,
+        },
+      });
+
+      setFreshInkKey((value) => value + 1);
       setNotice(
         result.message ||
-          'The wallet has supported today’s pond rite. The pond stamped the ledger.',
+          'The wallet has supported today’s pond rite. Web Supporter Passport stamped.',
       );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The wallet stamp failed.');
@@ -590,7 +699,7 @@ export function TobyworldPondPassport() {
         </div>
       )}
 
-      {isConnected && !hasEnoughAssets && (
+      {isConnected && !hasEnoughAssets && !isCheckingAssets && (
         <div className="pond-passport-gate">
           <strong>Two-asset gate.</strong>
           <p>
@@ -726,6 +835,7 @@ export function TobyworldPondPassport() {
               isLoading ||
               !hasEnoughAssets ||
               !persona ||
+              data?.source === 'wallet' ||
               (data?.limits?.rerollsRemaining ?? 0) <= 0
             }
           >
