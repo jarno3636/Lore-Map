@@ -21,6 +21,7 @@ import {
   MILESTONE_CHAIN_ID,
   MILESTONE_RELICS_ABI,
   MILESTONE_RELICS_ADDRESS,
+  getMilestoneBaseScanUrl,
   getMilestoneChainName,
 } from '@/lib/tobyworld-milestone-contract';
 import './milestone-badges.css';
@@ -65,6 +66,8 @@ type QuickAuthSdk = typeof sdk & {
     fetch?: QuickAuthFetch;
   };
 };
+
+const ZERO_BIGINT = BigInt(0);
 
 function getOrigin() {
   if (typeof window === 'undefined') return 'https://toby-atlas.vercel.app';
@@ -127,6 +130,7 @@ export function MilestoneBadges() {
 
   const totalEchoes = data.totalEchoes;
   const nextMilestone = data.nextMilestone;
+  const chainName = getMilestoneChainName();
 
   const nextProgress = useMemo(
     () => getMilestoneProgress(totalEchoes, nextMilestone.threshold),
@@ -167,7 +171,7 @@ export function MilestoneBadges() {
 
       const balance = read.result as bigint;
 
-      if (balance > 0n) {
+      if (balance > ZERO_BIGINT) {
         claimed.add(tokenId);
       }
     });
@@ -176,7 +180,7 @@ export function MilestoneBadges() {
   }, [balanceReads, data.milestones]);
 
   const isWrongChain = Boolean(isConnected && chainId && chainId !== MILESTONE_CHAIN_ID);
-  const chainName = getMilestoneChainName();
+  const isBusy = isWriting || isConfirming;
 
   const fetchMilestones = useCallback(async () => {
     setIsLoading(true);
@@ -250,12 +254,7 @@ export function MilestoneBadges() {
     }
 
     if (isWrongChain) {
-      if (switchChain) {
-        switchChain({ chainId: MILESTONE_CHAIN_ID });
-      } else {
-        setNotice(`Switch your wallet to ${chainName} before claiming.`);
-      }
-
+      switchChain({ chainId: MILESTONE_CHAIN_ID });
       return;
     }
 
@@ -368,7 +367,7 @@ export function MilestoneBadges() {
                 {isWrongChain ? (
                   <button
                     type="button"
-                    onClick={() => switchChain?.({ chainId: MILESTONE_CHAIN_ID })}
+                    onClick={() => switchChain({ chainId: MILESTONE_CHAIN_ID })}
                     disabled={isSwitching}
                   >
                     {isSwitching ? 'Switching…' : `Switch to ${chainName}`}
@@ -432,7 +431,7 @@ export function MilestoneBadges() {
       <div className="milestone-relics-grid">
         {data.milestones.map((milestone) => {
           const claimed = claimedTokenIds.has(milestone.tokenId);
-          const claiming = pendingTokenId === milestone.tokenId || isWriting || isConfirming;
+          const claiming = pendingTokenId === milestone.tokenId || isBusy;
           const locked = !milestone.progress.unlocked;
 
           return (
@@ -448,7 +447,9 @@ export function MilestoneBadges() {
               </div>
 
               <div className="milestone-relic-card-copy">
-                <p>{claimed ? 'CLAIMED RELIC' : locked ? 'LOCKED RELIC' : 'CLAIMABLE RELIC'}</p>
+                <p>
+                  {claimed ? 'CLAIMED RELIC' : locked ? 'LOCKED RELIC' : 'CLAIMABLE RELIC'}
+                </p>
                 <h3>{milestone.title}</h3>
                 <span>{milestone.description}</span>
               </div>
@@ -502,7 +503,7 @@ export function MilestoneBadges() {
       {lastHash && (
         <a
           className="milestone-relics-tx"
-          href={`https://${MILESTONE_CHAIN_ID === 84532 ? 'sepolia.' : ''}basescan.org/tx/${lastHash}`}
+          href={getMilestoneBaseScanUrl(lastHash)}
           target="_blank"
           rel="noreferrer"
         >
