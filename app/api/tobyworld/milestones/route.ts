@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { getTobyworldEchoTotals } from '@/lib/tobyworld-echo-totals';
 import {
   TOBYWORLD_MILESTONES,
+  getCommunityMultiplierCap,
   getMilestoneProgress,
   getNextMilestone,
+  getNextMultiplierCap,
 } from '@/lib/tobyworld-milestones';
 
 export const dynamic = 'force-dynamic';
@@ -25,17 +28,10 @@ function getErrorMessage(error: unknown) {
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
-
-    const { count, error } = await supabase
-      .from('tobyworld_rite_events')
-      .select('id', { count: 'exact', head: true });
-
-    if (error) {
-      throw new Error(`Milestone count failed: ${error.message}`);
-    }
-
-    const totalEchoes = count ?? 0;
+    const { totalEchoes, totalRites } = await getTobyworldEchoTotals(supabase);
     const nextMilestone = getNextMilestone(totalEchoes);
+    const multiplierCap = getCommunityMultiplierCap(totalEchoes);
+    const nextCap = getNextMultiplierCap(totalEchoes);
 
     const milestones = TOBYWORLD_MILESTONES.map((milestone) => {
       const progress = getMilestoneProgress(totalEchoes, milestone.threshold);
@@ -48,8 +44,14 @@ export async function GET() {
 
     return json({
       totalEchoes,
+      totalRites,
       nextMilestone,
       milestones,
+      multiplier: {
+        cap: multiplierCap,
+        nextCapAt: nextCap.nextCapAt,
+        nextCap: nextCap.nextCap,
+      },
     });
   } catch (error) {
     console.error('Milestones API failed:', error);
@@ -58,11 +60,17 @@ export async function GET() {
       {
         error: getErrorMessage(error),
         totalEchoes: 0,
+        totalRites: 0,
         nextMilestone: TOBYWORLD_MILESTONES[0],
         milestones: TOBYWORLD_MILESTONES.map((milestone) => ({
           ...milestone,
           progress: getMilestoneProgress(0, milestone.threshold),
         })),
+        multiplier: {
+          cap: 3,
+          nextCapAt: 1017,
+          nextCap: 6,
+        },
       },
       500,
     );
