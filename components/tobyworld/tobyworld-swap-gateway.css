@@ -315,11 +315,41 @@
   padding: 0 14px 14px;
 }
 
-14px;
+.toby-swap-button {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(249, 201, 104, 0.2);
+  border-radius: 16px;
+  padding: 12px 13px;
+  color: #d8d3bc;
+  background: rgba(35, 28, 18, 0.54);
+  font-size: 12px;
+  font-weight: 950;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
 }
 
+.toby-swap-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(249, 201, 104, 0.3);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
 
+.toby-swap-button.primary {
+  color: #061419;
+  background: linear-gradient(135deg, #f8d77d, #8de9ff);
+}
 
+.toby-swap-button.is-loading {
+  pointer-events: none;
+  opacity: 0.72;
+}
 .toby-swap-hidden-link {
   display: block;
   padding: 0 14px 14px;
