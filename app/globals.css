@@ -2459,3 +2459,94 @@ img {
     padding: 9px 10px;
   }
 }
+.home-quick-paths {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(100%, 1040px);
+  margin: clamp(22px, 5vw, 44px) auto 0;
+  gap: 12px;
+}
+
+.home-quick-path-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(146, 223, 241, 0.15);
+  border-radius: 24px;
+  padding: 14px;
+  color: #f5f0df;
+  text-decoration: none;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(141, 233, 255, 0.1), transparent 44%),
+    rgba(4, 21, 28, 0.58);
+  box-shadow:
+    inset 0 0 24px rgba(141, 233, 255, 0.035),
+    0 18px 44px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.home-quick-path-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(249, 201, 104, 0.28);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(249, 201, 104, 0.11), transparent 46%),
+    rgba(4, 21, 28, 0.72);
+  box-shadow:
+    inset 0 0 24px rgba(249, 201, 104, 0.04),
+    0 22px 54px rgba(0, 0, 0, 0.22);
+}
+
+.home-quick-path-card > span {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(249, 201, 104, 0.2);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(141, 233, 255, 0.18), transparent 62%),
+    rgba(35, 28, 18, 0.52);
+  font-size: 21px;
+  box-shadow: 0 0 24px rgba(141, 233, 255, 0.08);
+}
+
+.home-quick-path-card p {
+  margin: 0;
+  color: #ffe3a0;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.home-quick-path-card h2 {
+  margin: 4px 0;
+  color: #fff8e6;
+  font-family: Georgia, serif;
+  font-size: 24px;
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+}
+
+.home-quick-path-card small {
+  display: block;
+  color: #a8c5cc;
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+@media (min-width: 760px) {
+  .home-quick-paths {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-quick-path-card {
+    align-items: start;
+  }
+}
