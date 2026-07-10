@@ -34,70 +34,87 @@ const BASE_RPC_URL =
 const WALLETCONNECT_PROJECT_ID =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim();
 
-function getConnectors() {
-  const connectors = [
-    /*
-     * Farcaster Mini App wallet.
-     */
-    farcasterMiniApp(),
+/**
+ * Shared configuration values used by both connector branches.
+ */
+const storage = createStorage({
+  storage: cookieStorage,
+  key: 'tobyworld-wagmi',
+});
 
-    /*
-     * Base Account / smart-wallet connection.
-     */
-    baseAccount({
-      appName: APP_NAME,
-      appLogoUrl: APP_ICON_URL,
-    }),
+const transports = {
+  [base.id]: http(BASE_RPC_URL),
+};
 
-    /*
-     * Injected wallet providers such as MetaMask,
-     * Coinbase Wallet, Base App, Rabby, and Rainbow.
-     */
-    injected({
-      shimDisconnect: true,
-    }),
-  ];
-
-  /*
-   * WalletConnect is optional.
-   * It is only added when a project ID exists.
-   */
-  if (WALLETCONNECT_PROJECT_ID) {
-    connectors.push(
-      walletConnect({
-        projectId: WALLETCONNECT_PROJECT_ID,
-        showQrModal: true,
-        metadata: {
-          name: APP_NAME,
-          description: APP_DESCRIPTION,
-          url: APP_URL,
-          icons: [APP_ICON_URL],
-        },
-      }),
-    );
-  }
-
-  return connectors;
+/**
+ * Create each connector through a function so a fresh connector instance is
+ * supplied whenever a Wagmi config is created.
+ */
+function createFarcasterConnector() {
+  return farcasterMiniApp();
 }
 
+function createBaseAccountConnector() {
+  return baseAccount({
+    appName: APP_NAME,
+    appLogoUrl: APP_ICON_URL,
+  });
+}
+
+function createInjectedConnector() {
+  return injected({
+    shimDisconnect: true,
+  });
+}
+
+/**
+ * Two explicit createConfig branches avoid mutating a connector array whose
+ * type was inferred too narrowly before WalletConnect was added.
+ */
 export function getWagmiConfig() {
+  if (WALLETCONNECT_PROJECT_ID) {
+    return createConfig({
+      chains: [base],
+      ssr: true,
+      multiInjectedProviderDiscovery: true,
+
+      storage,
+
+      connectors: [
+        createFarcasterConnector(),
+        createBaseAccountConnector(),
+        createInjectedConnector(),
+
+        walletConnect({
+          projectId: WALLETCONNECT_PROJECT_ID,
+          showQrModal: true,
+          metadata: {
+            name: APP_NAME,
+            description: APP_DESCRIPTION,
+            url: APP_URL,
+            icons: [APP_ICON_URL],
+          },
+        }),
+      ],
+
+      transports,
+    });
+  }
+
   return createConfig({
     chains: [base],
-
     ssr: true,
-
     multiInjectedProviderDiscovery: true,
 
-    storage: createStorage({
-      storage: cookieStorage,
-      key: 'tobyworld-wagmi',
-    }),
+    storage,
 
-    connectors: getConnectors(),
+    connectors: [
+      createFarcasterConnector(),
+      createBaseAccountConnector(),
+      createInjectedConnector(),
+    ],
 
-    transports: {
-      [base.id]: http(BASE_RPC_URL),
-    },
+    transports,
   });
 }
 
