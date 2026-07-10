@@ -467,6 +467,7 @@ export function TobyworldPondPassport() {
   const [data, setData] = useState<PassportResponse | null>(null);
   const [contextUser, setContextUser] = useState<MiniAppUserContext | null>(null);
   const [isMiniApp, setIsMiniApp] = useState(false);
+  const [hasCheckedMiniApp, setHasCheckedMiniApp] = useState(false);
   const [heldAssets, setHeldAssets] = useState<TobyworldAsset[]>([]);
   const [isCheckingAssets, setIsCheckingAssets] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -491,7 +492,7 @@ export function TobyworldPondPassport() {
   const hasFarcasterProfile = Boolean(contextUser?.fid || (snapshot?.fid && snapshot.fid > 0));
   const canUseFarcasterPassport = Boolean(contextUser?.fid && hasQuickAuth);
   const isFarcasterSession = Boolean(isMiniApp || hasFarcasterProfile || canUseFarcasterPassport);
-  const canUseWalletSupport = Boolean(!isFarcasterSession);
+  const canUseWalletSupport = Boolean(hasCheckedMiniApp && !isFarcasterSession);
 
   const fallbackFrogImage = pickBackupFrogImage(snapshot?.fid || address);
   const pfpUrl = !pfpFailed ? contextUser?.pfpUrl : undefined;
@@ -603,17 +604,22 @@ export function TobyworldPondPassport() {
       }
     } catch {
       setContextUser(null);
+    } finally {
+      setHasCheckedMiniApp(true);
     }
   }, []);
 
   const connectWallet = useCallback(async () => {
     setNotice(null);
 
-    const preferredConnector =
-      connectors.find((connector) => /farcaster/i.test(connector.name)) ??
+    const farcasterConnector = connectors.find((connector) => /farcaster/i.test(connector.name));
+    const webConnector =
       connectors.find((connector) => /base|coinbase/i.test(connector.name)) ??
+      connectors.find((connector) => /walletconnect/i.test(connector.name)) ??
       connectors.find((connector) => /injected|metamask/i.test(connector.name)) ??
       connectors[0];
+
+    const preferredConnector = isFarcasterSession ? farcasterConnector ?? webConnector : webConnector;
 
     if (!preferredConnector) {
       setNotice(
@@ -636,7 +642,7 @@ export function TobyworldPondPassport() {
           : 'Wallet connection was cancelled or failed. Try again from a wallet browser.',
       );
     }
-  }, [checkWalletAssets, connectAsync, connectors]);
+  }, [checkWalletAssets, connectAsync, connectors, isFarcasterSession]);
 
   const fetchPassport = useCallback(
     async (reroll = false) => {
