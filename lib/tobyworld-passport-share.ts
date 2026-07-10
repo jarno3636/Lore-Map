@@ -51,11 +51,12 @@ function cleanPhoto(value: unknown) {
 }
 
 export function cleanPassportSharePayload(value: unknown): PassportSharePayload {
-  const input = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const input =
+    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 
   return {
     title: cleanString(input.title, DEFAULT_PAYLOAD.title, 72),
-    characteristic: cleanString(input.characteristic, DEFAULT_PAYLOAD.characteristic, 150),
+    characteristic: cleanString(input.characteristic, DEFAULT_PAYLOAD.characteristic, 145),
     name: cleanString(input.name, DEFAULT_PAYLOAD.name, 52),
     handle: cleanString(input.handle, DEFAULT_PAYLOAD.handle, 52),
     mark: cleanString(input.mark, DEFAULT_PAYLOAD.mark, 42),
@@ -70,19 +71,20 @@ export function cleanPassportSharePayload(value: unknown): PassportSharePayload 
 }
 
 function makeShareId() {
-  const bytes = new Uint8Array(9);
+  const bytes = new Uint8Array(10);
   crypto.getRandomValues(bytes);
 
   return Array.from(bytes)
     .map((byte) => byte.toString(36).padStart(2, '0'))
     .join('')
-    .slice(0, 14);
+    .slice(0, 16)
+    .toLowerCase();
 }
 
 export async function createPassportShare(payload: PassportSharePayload) {
   const supabase = getSupabaseAdmin();
 
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = makeShareId();
 
     const { error } = await supabase.from('tobyworld_passport_shares').insert({
@@ -101,9 +103,9 @@ export async function createPassportShare(payload: PassportSharePayload) {
 }
 
 export async function getPassportShare(id: string) {
-  const safeId = id.trim();
+  const safeId = id.trim().toLowerCase();
 
-  if (!/^[a-z0-9]{8,24}$/i.test(safeId)) {
+  if (!/^[a-z0-9]{8,24}$/.test(safeId)) {
     return null;
   }
 
