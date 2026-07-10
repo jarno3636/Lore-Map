@@ -65,15 +65,22 @@ function json(data: unknown, status = 200) {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
+
   return 'Unknown server error.';
 }
 
 function toNumber(value: number | null | undefined, fallback = 0) {
-  if (!Number.isFinite(value ?? NaN)) return fallback;
+  if (!Number.isFinite(value ?? Number.NaN)) {
+    return fallback;
+  }
+
   return Math.max(0, Math.floor(value ?? fallback));
 }
 
-function cleanProfileText(value: string | null | undefined, maxLength = 80) {
+function cleanProfileText(
+  value: string | null | undefined,
+  maxLength = 80,
+) {
   const cleaned = value?.trim().replace(/\s+/g, ' ');
 
   if (!cleaned) return null;
@@ -92,10 +99,18 @@ function rowToPersona(row: PassportRow): PondPassportPersona {
   };
 }
 
-function getRerollsRemaining(row: PassportRow | null, today: string) {
-  if (!row || row.generated_on !== today) return POND_PASSPORT_LIMITS.maxDailyRerolls;
+function getRerollsRemaining(
+  row: PassportRow | null,
+  today: string,
+) {
+  if (!row || row.generated_on !== today) {
+    return POND_PASSPORT_LIMITS.maxDailyRerolls;
+  }
 
-  return Math.max(0, POND_PASSPORT_LIMITS.maxDailyRerolls - row.reroll_count);
+  return Math.max(
+    0,
+    POND_PASSPORT_LIMITS.maxDailyRerolls - row.reroll_count,
+  );
 }
 
 async function getPassportRow(fid: number) {
@@ -104,49 +119,140 @@ async function getPassportRow(fid: number) {
   const { data, error } = await supabase
     .from('tobyworld_pond_passports')
     .select(
-      'fid, title, characteristic, strange_habit, pond_warning, stamp, share_text, seed, source, generated_on, last_generated_at, reroll_count, snapshot',
+      [
+        'fid',
+        'title',
+        'characteristic',
+        'strange_habit',
+        'pond_warning',
+        'stamp',
+        'share_text',
+        'seed',
+        'source',
+        'generated_on',
+        'last_generated_at',
+        'reroll_count',
+        'snapshot',
+      ].join(', '),
     )
     .eq('fid', fid)
     .maybeSingle<PassportRow>();
 
   if (error) {
-    throw new Error(`Pond passport read failed: ${error.message}`);
+    throw new Error(
+      `Pond passport read failed: ${error.message}`,
+    );
   }
 
   return data;
 }
 
-async function getPassportSnapshot(fid: number): Promise<PondPassportSnapshot> {
+/**
+ * Always reads current rite information from the live daily-rite row.
+ *
+ * This prevents an already-generated passport from continuing to show
+ * the snapshot that existed before today's rite was completed.
+ */
+async function getPassportSnapshot(
+  fid: number,
+): Promise<PondPassportSnapshot> {
   const supabase = getSupabaseAdmin();
 
-  const [{ data, error }, totals] = await Promise.all([
+  const [profileResult, totals] = await Promise.all([
     supabase
       .from('tobyworld_daily_rites')
       .select(
-        'fid, username, display_name, current_mark, streak_count, best_streak, total_completions, current_echo_power, highest_echo_power',
+        [
+          'fid',
+          'username',
+          'display_name',
+          'current_mark',
+          'streak_count',
+          'best_streak',
+          'total_completions',
+          'current_echo_power',
+          'highest_echo_power',
+        ].join(', '),
       )
       .eq('fid', fid)
       .maybeSingle<DailyRitePassportRow>(),
+
     getTobyworldEchoTotals(supabase),
   ]);
 
-  if (error) {
-    throw new Error(`Daily rite passport read failed: ${error.message}`);
+  if (profileResult.error) {
+    throw new Error(
+      `Daily rite passport read failed: ${profileResult.error.message}`,
+    );
   }
+
+  const profile = profileResult.data;
 
   return {
     fid,
-    username: cleanProfileText(data?.username, 80),
-    displayName: cleanProfileText(data?.display_name, 100),
-    currentMark: cleanProfileText(data?.current_mark, 80) ?? 'Unstamped Frog',
-    streakCount: toNumber(data?.streak_count),
-    bestStreak: toNumber(data?.best_streak),
-    totalCompletions: toNumber(data?.total_completions),
-    currentEchoPower: Math.max(1, toNumber(data?.current_echo_power, 1)),
-    highestEchoPower: Math.max(1, toNumber(data?.highest_echo_power, 1)),
+    username: cleanProfileText(profile?.username, 80),
+    displayName: cleanProfileText(
+      profile?.display_name,
+      100,
+    ),
+    currentMark:
+      cleanProfileText(profile?.current_mark, 80) ??
+      'Unstamped Frog',
+    streakCount: toNumber(profile?.streak_count),
+    bestStreak: toNumber(profile?.best_streak),
+    totalCompletions: toNumber(
+      profile?.total_completions,
+    ),
+    currentEchoPower: Math.max(
+      1,
+      toNumber(profile?.current_echo_power, 1),
+    ),
+    highestEchoPower: Math.max(
+      1,
+      toNumber(profile?.highest_echo_power, 1),
+    ),
     totalEchoes: totals.totalEchoes,
     totalRites: totals.totalRites,
   };
+}
+
+/**
+ * Refreshes only the stored activity snapshot.
+ *
+ * It does not:
+ * - create a new title
+ * - use a reroll
+ * - change the persona
+ * - change the generated date
+ * - affect the user's Farcaster PFP
+ */
+async function refreshPassportSnapshot({
+  fid,
+  snapshot,
+}: {
+  fid: number;
+  snapshot: PondPassportSnapshot;
+}) {
+  const supabase = getSupabaseAdmin();
+
+  const { error } = await supabase
+    .from('tobyworld_pond_passports')
+    .update({
+      snapshot,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('fid', fid);
+
+  if (error) {
+    /*
+     * Returning the live snapshot is more important than failing the
+     * request because the cached snapshot could not be updated.
+     */
+    console.warn(
+      'Passport snapshot cache refresh failed:',
+      error.message,
+    );
+  }
 }
 
 async function generateGeminiPersona(
@@ -163,7 +269,9 @@ async function generateGeminiPersona(
     };
   }
 
-  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+  const model =
+    process.env.GEMINI_MODEL?.trim() ||
+    'gemini-2.5-flash';
 
   const prompt = `
 You generate funny fictional Pond Passport traits for Tobyworld, a frog/pond/lore mini app.
@@ -223,11 +331,13 @@ ${JSON.stringify({
             threshold: 'BLOCK_MEDIUM_AND_ABOVE',
           },
           {
-            category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+            category:
+              'HARM_CATEGORY_SEXUALLY_EXPLICIT',
             threshold: 'BLOCK_MEDIUM_AND_ABOVE',
           },
           {
-            category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+            category:
+              'HARM_CATEGORY_DANGEROUS_CONTENT',
             threshold: 'BLOCK_MEDIUM_AND_ABOVE',
           },
         ],
@@ -247,12 +357,24 @@ ${JSON.stringify({
               'shareText',
             ],
             properties: {
-              title: { type: 'STRING' },
-              characteristic: { type: 'STRING' },
-              strangeHabit: { type: 'STRING' },
-              pondWarning: { type: 'STRING' },
-              stamp: { type: 'STRING' },
-              shareText: { type: 'STRING' },
+              title: {
+                type: 'STRING',
+              },
+              characteristic: {
+                type: 'STRING',
+              },
+              strangeHabit: {
+                type: 'STRING',
+              },
+              pondWarning: {
+                type: 'STRING',
+              },
+              stamp: {
+                type: 'STRING',
+              },
+              shareText: {
+                type: 'STRING',
+              },
             },
           },
         },
@@ -261,7 +383,10 @@ ${JSON.stringify({
   );
 
   if (!response.ok) {
-    console.warn('Gemini passport generation failed:', await response.text());
+    console.warn(
+      'Gemini passport generation failed:',
+      await response.text(),
+    );
 
     return {
       persona: fallback,
@@ -269,7 +394,9 @@ ${JSON.stringify({
     };
   }
 
-  const payload = (await response.json()) as GeminiResponse;
+  const payload =
+    (await response.json()) as GeminiResponse;
+
   const text = payload.candidates?.[0]?.content?.parts
     ?.map((part) => part.text ?? '')
     .join('')
@@ -283,7 +410,8 @@ ${JSON.stringify({
   }
 
   try {
-    const parsed = JSON.parse(text) as Partial<PondPassportPersona>;
+    const parsed =
+      JSON.parse(text) as Partial<PondPassportPersona>;
 
     return {
       persona: sanitizePersona(parsed, fallback),
@@ -341,18 +469,38 @@ async function savePassport({
       },
     )
     .select(
-      'fid, title, characteristic, strange_habit, pond_warning, stamp, share_text, seed, source, generated_on, last_generated_at, reroll_count, snapshot',
+      [
+        'fid',
+        'title',
+        'characteristic',
+        'strange_habit',
+        'pond_warning',
+        'stamp',
+        'share_text',
+        'seed',
+        'source',
+        'generated_on',
+        'last_generated_at',
+        'reroll_count',
+        'snapshot',
+      ].join(', '),
     )
     .single<PassportRow>();
 
   if (error) {
-    throw new Error(`Pond passport save failed: ${error.message}`);
+    throw new Error(
+      `Pond passport save failed: ${error.message}`,
+    );
   }
 
   return data;
 }
 
-async function createPassport(fid: number, existing: PassportRow | null, reroll: boolean) {
+async function createPassport(
+  fid: number,
+  existing: PassportRow | null,
+  reroll: boolean,
+) {
   const today = getTodayUtcDate();
   const snapshot = await getPassportSnapshot(fid);
 
@@ -363,8 +511,16 @@ async function createPassport(fid: number, existing: PassportRow | null, reroll:
     : 0;
 
   const nonce = nextRerollCount;
-  const fallback = createFallbackPersona(snapshot, nonce);
-  const generated = await generateGeminiPersona(snapshot, fallback, nonce);
+  const fallback = createFallbackPersona(
+    snapshot,
+    nonce,
+  );
+
+  const generated = await generateGeminiPersona(
+    snapshot,
+    fallback,
+    nonce,
+  );
 
   return savePassport({
     fid,
@@ -376,38 +532,72 @@ async function createPassport(fid: number, existing: PassportRow | null, reroll:
   });
 }
 
-async function handlePassport(request: Request, reroll: boolean) {
+async function handlePassport(
+  request: Request,
+  reroll: boolean,
+) {
   const auth = await requireFarcasterFid(request);
 
   if (!auth.ok) {
-    return json({ error: auth.error, code: 'auth_required' }, auth.status);
+    return json(
+      {
+        error: auth.error,
+        code: 'auth_required',
+      },
+      auth.status,
+    );
   }
 
   const today = getTodayUtcDate();
   const existing = await getPassportRow(auth.fid);
 
+  /*
+   * Important fix:
+   *
+   * Keep today's generated persona, but always retrieve the latest
+   * Daily Rite data before returning the passport.
+   */
   if (!reroll && existing?.generated_on === today) {
+    const freshSnapshot =
+      await getPassportSnapshot(auth.fid);
+
+    await refreshPassportSnapshot({
+      fid: auth.fid,
+      snapshot: freshSnapshot,
+    });
+
     return json({
       ok: true,
       fid: auth.fid,
       persona: rowToPersona(existing),
-      snapshot: existing.snapshot,
+      snapshot: freshSnapshot,
       source: existing.source,
       generatedOn: existing.generated_on,
       limits: {
-        rerollsRemaining: getRerollsRemaining(existing, today),
-        cooldownSeconds: secondsUntilNextGeneration(existing.last_generated_at),
+        rerollsRemaining: getRerollsRemaining(
+          existing,
+          today,
+        ),
+        cooldownSeconds:
+          secondsUntilNextGeneration(
+            existing.last_generated_at,
+          ),
       },
     });
   }
 
   if (reroll && existing) {
-    const cooldownSeconds = secondsUntilNextGeneration(existing.last_generated_at);
+    const cooldownSeconds =
+      secondsUntilNextGeneration(
+        existing.last_generated_at,
+      );
 
     if (cooldownSeconds > 0) {
       return json(
         {
-          error: `The pond is still drying the ink. Try again in ${cooldownSeconds} seconds.`,
+          error:
+            `The pond is still drying the ink. ` +
+            `Try again in ${cooldownSeconds} seconds.`,
           code: 'cooldown_active',
           cooldownSeconds,
         },
@@ -417,11 +607,14 @@ async function handlePassport(request: Request, reroll: boolean) {
 
     if (
       existing.generated_on === today &&
-      existing.reroll_count >= POND_PASSPORT_LIMITS.maxDailyRerolls
+      existing.reroll_count >=
+        POND_PASSPORT_LIMITS.maxDailyRerolls
     ) {
       return json(
         {
-          error: 'Daily passport rerolls are used up. Return tomorrow for a new stamp.',
+          error:
+            'Daily passport rerolls are used up. ' +
+            'Return tomorrow for a new stamp.',
           code: 'daily_reroll_limit',
           rerollsRemaining: 0,
         },
@@ -430,8 +623,16 @@ async function handlePassport(request: Request, reroll: boolean) {
     }
   }
 
-  const saved = await createPassport(auth.fid, existing, reroll);
+  const saved = await createPassport(
+    auth.fid,
+    existing,
+    reroll,
+  );
 
+  /*
+   * saved.snapshot is generated from a fresh read of the Daily Rite
+   * table, so newly-created and rerolled passports are also current.
+   */
   return json({
     ok: true,
     fid: auth.fid,
@@ -440,8 +641,14 @@ async function handlePassport(request: Request, reroll: boolean) {
     source: saved.source,
     generatedOn: saved.generated_on,
     limits: {
-      rerollsRemaining: getRerollsRemaining(saved, today),
-      cooldownSeconds: secondsUntilNextGeneration(saved.last_generated_at),
+      rerollsRemaining: getRerollsRemaining(
+        saved,
+        today,
+      ),
+      cooldownSeconds:
+        secondsUntilNextGeneration(
+          saved.last_generated_at,
+        ),
     },
   });
 }
@@ -450,7 +657,10 @@ export async function GET(request: Request) {
   try {
     return await handlePassport(request, false);
   } catch (error) {
-    console.error('Pond passport GET failed:', error);
+    console.error(
+      'Pond passport GET failed:',
+      error,
+    );
 
     return json(
       {
@@ -466,7 +676,10 @@ export async function POST(request: Request) {
   try {
     return await handlePassport(request, true);
   } catch (error) {
-    console.error('Pond passport POST failed:', error);
+    console.error(
+      'Pond passport POST failed:',
+      error,
+    );
 
     return json(
       {
