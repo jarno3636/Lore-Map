@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
 import { WagmiProvider, type State } from 'wagmi';
-import { wagmiConfig } from '@/lib/wagmi';
+import { getWagmiConfig } from '@/lib/wagmi';
 
 export function AppProviders({
   children,
@@ -12,11 +15,30 @@ export function AppProviders({
   children: ReactNode;
   initialState?: State;
 }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [wagmiConfig] = useState(() => getWagmiConfig());
+
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 15_000,
+            refetchOnWindowFocus: false,
+            retry: 1,
+          },
+        },
+      }),
+  );
 
   return (
-    <WagmiProvider config={wagmiConfig} initialState={initialState} reconnectOnMount>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <WagmiProvider
+      config={wagmiConfig}
+      initialState={initialState}
+      reconnectOnMount
+    >
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
     </WagmiProvider>
   );
 }
