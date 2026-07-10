@@ -110,7 +110,7 @@ async function getHeldTobyworldAssets(
         return null;
       }
 
-      if (result.value.balance <= 0n) {
+      if (result.value.balance <= BigInt(0)) {
         return null;
       }
 
