@@ -1,4 +1,5 @@
 import { TobyworldAtlas } from '@/components/TobyworldAtlas';
+import { BackToTopButton } from '@/components/tobyworld/BackToTopButton';
 import { DailyPondRite } from '@/components/tobyworld/DailyPondRite';
 import { TobyworldPondPassport } from '@/components/tobyworld/TobyworldPondPassport';
 import { TobyworldSignalProfile } from '@/components/tobyworld/TobyworldSignalProfile';
@@ -44,7 +45,7 @@ const quickPaths = [
 
 export default function Home() {
   return (
-    <main className="home-shell">
+    <main id="page-top" className="home-shell">
       <div className="home-background" aria-hidden="true">
         <div className="home-orb home-orb-one" />
         <div className="home-orb home-orb-two" />
@@ -73,9 +74,11 @@ export default function Home() {
             <a href="#swap-gateway" className="home-primary-link">
               Open Swap Gate
             </a>
+
             <a href="#daily-rite" className="home-secondary-link">
               Daily Rite
             </a>
+
             <a href="#pond-passport" className="home-secondary-link">
               Pond Passport
             </a>
@@ -134,8 +137,13 @@ export default function Home() {
 
       <section className="home-quick-paths" aria-label="Tobyworld path">
         {quickPaths.map((path) => (
-          <a href={path.href} className="home-quick-path-card" key={path.title}>
+          <a
+            href={path.href}
+            className="home-quick-path-card"
+            key={path.title}
+          >
             <span>{path.icon}</span>
+
             <div>
               <p>{path.eyebrow}</p>
               <h2>{path.title}</h2>
@@ -149,6 +157,7 @@ export default function Home() {
         <div className="home-section-heading">
           <p className="home-kicker">SWAP GATE</p>
           <h2>Choose your path.</h2>
+
           <p>
             Open a Base swap for Toby, Taboshi, or Patience. In Farcaster, the app
             uses the native swap flow when available. On web, it falls back to Sushi.
@@ -162,6 +171,7 @@ export default function Home() {
         <div className="home-section-heading">
           <p className="home-kicker">DAILY RITE</p>
           <h2>Return once a day.</h2>
+
           <p>
             Complete one small pond ritual, build your streak, earn your mark,
             and add weighted echo power toward community relic milestones.
@@ -175,6 +185,7 @@ export default function Home() {
         <div className="home-section-heading">
           <p className="home-kicker">POND PASSPORT</p>
           <h2>Get your stamp.</h2>
+
           <p>
             Generate a funny Tobyworld title, trait, strange habit, pond warning,
             and share quote based on your Daily Rite activity.
@@ -198,6 +209,7 @@ export default function Home() {
         <div className="home-section-heading">
           <p className="home-kicker">SHRINE</p>
           <h2>Ask the pond.</h2>
+
           <p>
             Reveal the role your path carries, then cast your generated Tobyworld
             quote.
@@ -214,23 +226,38 @@ export default function Home() {
           <a href="/community" rel="noreferrer">
             Shrine ↗
           </a>
+
           <a href="/milestones" rel="noreferrer">
             Relics ↗
           </a>
-          <a href="#pond-passport" rel="noreferrer">
+
+          <a href="#pond-passport">
             Passport ↗
           </a>
+
           <a href="https://toadgod.xyz" target="_blank" rel="noreferrer">
             Toadgod ↗
           </a>
-          <a href="https://toadgod.xyz/rune3" target="_blank" rel="noreferrer">
+
+          <a
+            href="https://toadgod.xyz/rune3"
+            target="_blank"
+            rel="noreferrer"
+          >
             Rune III ↗
           </a>
-          <a href="https://x.com/toadgod1017" target="_blank" rel="noreferrer">
+
+          <a
+            href="https://x.com/toadgod1017"
+            target="_blank"
+            rel="noreferrer"
+          >
             Toadgod X ↗
           </a>
         </div>
       </section>
+
+      <BackToTopButton />
     </main>
   );
 }
