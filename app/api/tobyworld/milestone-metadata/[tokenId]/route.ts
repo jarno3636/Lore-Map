@@ -18,7 +18,7 @@ const MILESTONE_METADATA: Record<number, MilestoneMetadataDefinition> = {
     description:
       'The first Tobyworld community relic, awakened when the pond reaches 1,017 weighted echoes.',
     threshold: 1017,
-    symbol: '△',
+    symbol: '\u25B3',
     accent: 'Red',
     imagePath: '/images/milestones/still-water-echo.png',
   },
@@ -28,7 +28,7 @@ const MILESTONE_METADATA: Record<number, MilestoneMetadataDefinition> = {
     description:
       'A Tobyworld community relic awakened when the pond reaches 7,777 weighted echoes.',
     threshold: 7777,
-    symbol: '🐸',
+    symbol: '\uD83D\uDC38',
     accent: 'Blue',
     imagePath: '/images/milestones/sevenfold-pond.png',
   },
@@ -38,7 +38,7 @@ const MILESTONE_METADATA: Record<number, MilestoneMetadataDefinition> = {
     description:
       'A Tobyworld community relic awakened when the pond reaches 185,964 weighted echoes.',
     threshold: 185964,
-    symbol: '🍃',
+    symbol: '\uD83C\uDF43',
     accent: 'Green',
     imagePath: '/images/milestones/taboshi-bloom.png',
   },
@@ -48,7 +48,7 @@ const MILESTONE_METADATA: Record<number, MilestoneMetadataDefinition> = {
     description:
       'The final Tobyworld community relic, awakened when the pond reaches 7,777,777 weighted echoes.',
     threshold: 7777777,
-    symbol: '✦',
+    symbol: '\u2726',
     accent: 'Gold',
     imagePath: '/images/milestones/endless-gate.png',
   },
@@ -58,6 +58,7 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, {
     status,
     headers: {
+      'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control':
         status === 200
           ? 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
@@ -98,6 +99,10 @@ function getPublicOrigin(request: Request) {
   return new URL(request.url).origin;
 }
 
+function getSupportedTokenIds() {
+  return Object.keys(MILESTONE_METADATA).map((value) => Number(value));
+}
+
 export async function GET(
   request: Request,
   context: {
@@ -108,20 +113,15 @@ export async function GET(
 ) {
   try {
     const { tokenId } = await context.params;
-
     const normalizedTokenId = tokenId.trim();
     const numericTokenId = Number(normalizedTokenId);
 
-    if (
-      !Number.isSafeInteger(numericTokenId) ||
-      numericTokenId < 1 ||
-      numericTokenId > 4
-    ) {
+    if (!Number.isSafeInteger(numericTokenId)) {
       return json(
         {
           error: 'Milestone not found.',
           tokenId: normalizedTokenId,
-          supportedTokenIds: [1, 2, 3, 4],
+          supportedTokenIds: getSupportedTokenIds(),
         },
         404,
       );
@@ -134,7 +134,7 @@ export async function GET(
         {
           error: 'Milestone not found.',
           tokenId: normalizedTokenId,
-          supportedTokenIds: [1, 2, 3, 4],
+          supportedTokenIds: getSupportedTokenIds(),
         },
         404,
       );
@@ -161,13 +161,13 @@ export async function GET(
         },
         {
           trait_type: 'Milestone',
-          value: numericTokenId,
           display_type: 'number',
+          value: numericTokenId,
         },
         {
           trait_type: 'Echo Threshold',
-          value: milestone.threshold,
           display_type: 'number',
+          value: milestone.threshold,
         },
         {
           trait_type: 'Symbol',
