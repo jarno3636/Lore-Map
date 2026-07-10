@@ -5,6 +5,7 @@ import { getTobyworldEchoTotals } from '@/lib/tobyworld-echo-totals';
 import { getRiteEchoMultiplier } from '@/lib/tobyworld-milestones';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 type ProfilePayload = {
   username?: string | null;
@@ -42,6 +43,20 @@ type RiteEventRow = {
   total_completions: number | null;
   echo_power: number | null;
   multiplier_cap: number | null;
+};
+
+type RiteProfileSnapshot = {
+  fid: number;
+  username: string | null;
+  displayName: string | null;
+  pfpUrl: string | null;
+  currentMark: string;
+  streakCount: number;
+  bestStreak: number;
+  totalCompletions: number;
+  lastCompletedOn: string | null;
+  currentEchoPower: number;
+  highestEchoPower: number;
 };
 
 const RITES = [
@@ -88,6 +103,7 @@ function json(data: unknown, status = 200) {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
+
   return 'Unknown server error.';
 }
 
@@ -97,6 +113,7 @@ function getTodayUtc() {
 
 function getYesterdayUtc() {
   const date = new Date();
+
   date.setUTCDate(date.getUTCDate() - 1);
 
   return date.toISOString().slice(0, 10);
@@ -124,8 +141,8 @@ function pickRite(fid: number, today: string) {
   const seed = `${fid}:${today}`;
   let hash = 0;
 
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
   }
 
   return RITES[hash % RITES.length];
@@ -133,7 +150,7 @@ function pickRite(fid: number, today: string) {
 
 function buildShareText(mark: string, streak: number, echoPower: number) {
   return [
-    `I completed today’s Tobyworld Daily Rite.`,
+    'I completed today’s Tobyworld Daily Rite.',
     '',
     `Mark: ${mark}`,
     `Streak: ${streak}`,
@@ -143,6 +160,45 @@ function buildShareText(mark: string, streak: number, echoPower: number) {
     '',
     '$Patience <> $toby <> $Taboshi',
   ].join('\n');
+}
+
+function normalizeProfile(
+  profile: DailyRiteRow | null | undefined,
+  fid: number,
+): RiteProfileSnapshot {
+  return {
+    fid,
+    username: profile?.username ?? null,
+    displayName: profile?.display_name ?? null,
+    pfpUrl: profile?.pfp_url ?? null,
+    currentMark: profile?.current_mark ?? 'Pond Visitor',
+    streakCount: profile?.streak_count ?? 0,
+    bestStreak: profile?.best_streak ?? 0,
+    totalCompletions: profile?.total_completions ?? 0,
+    lastCompletedOn: profile?.last_completed_on ?? null,
+    currentEchoPower: profile?.current_echo_power ?? 1,
+    highestEchoPower: profile?.highest_echo_power ?? 1,
+  };
+}
+
+function buildResponseProfile(
+  profile: DailyRiteRow | null | undefined,
+  fid: number,
+) {
+  const snapshot = normalizeProfile(profile, fid);
+
+  return {
+    profile: profile ?? null,
+    snapshot,
+
+    streakCount: snapshot.streakCount,
+    bestStreak: snapshot.bestStreak,
+    totalCompletions: snapshot.totalCompletions,
+    currentMark: snapshot.currentMark,
+    currentEchoPower: snapshot.currentEchoPower,
+    highestEchoPower: snapshot.highestEchoPower,
+    lastCompletedOn: snapshot.lastCompletedOn,
+  };
 }
 
 async function readBody(request: Request) {
@@ -159,7 +215,19 @@ async function getDailyProfile(fid: number) {
   const { data, error } = await supabase
     .from('tobyworld_daily_rites')
     .select(
-      'fid, streak_count, best_streak, total_completions, last_completed_on, current_mark, username, display_name, pfp_url, current_echo_power, highest_echo_power',
+      [
+        'fid',
+        'streak_count',
+        'best_streak',
+        'total_completions',
+        'last_completed_on',
+        'current_mark',
+        'username',
+        'display_name',
+        'pfp_url',
+        'current_echo_power',
+        'highest_echo_power',
+      ].join(', '),
     )
     .eq('fid', fid)
     .maybeSingle<DailyRiteRow>();
@@ -171,57 +239,98 @@ async function getDailyProfile(fid: number) {
   return data;
 }
 
+async function getTodayEvent(fid: number, today: string) {
+  const supabase = getSupabaseAdmin();
+
+  const { data, error } = await supabase
+    .from('tobyworld_rite_events')
+    .select(
+      [
+        'id',
+        'fid',
+        'rite_date',
+        'rite_key',
+        'mark',
+        'share_text',
+        'completed_at',
+        'streak_count',
+        'total_completions',
+        'echo_power',
+        'multiplier_cap',
+      ].join(', '),
+    )
+    .eq('fid', fid)
+    .eq('rite_date', today)
+    .maybeSingle<RiteEventRow>();
+
+  if (error) {
+    throw new Error(`Daily rite event read failed: ${error.message}`);
+  }
+
+  return data;
+}
+
 export async function GET(request: Request) {
   try {
     const auth = await requireFarcasterFid(request);
 
     if (!auth.ok) {
-      return json({ error: auth.error }, auth.status);
+      return json(
+        {
+          ok: false,
+          error: auth.error,
+        },
+        auth.status,
+      );
     }
 
     const supabase = getSupabaseAdmin();
     const today = getTodayUtc();
-    const profile = await getDailyProfile(auth.fid);
+    const yesterday = getYesterdayUtc();
+
+    const [profile, todayEvent, totals] = await Promise.all([
+      getDailyProfile(auth.fid),
+      getTodayEvent(auth.fid, today),
+      getTobyworldEchoTotals(supabase),
+    ]);
+
     const rite = pickRite(auth.fid, today);
 
-    const { data: todayEvent, error: eventError } = await supabase
-      .from('tobyworld_rite_events')
-      .select(
-        'id, fid, rite_date, rite_key, mark, share_text, completed_at, streak_count, total_completions, echo_power, multiplier_cap',
-      )
-      .eq('fid', auth.fid)
-      .eq('rite_date', today)
-      .maybeSingle<RiteEventRow>();
-
-    if (eventError) {
-      throw new Error(`Daily rite event read failed: ${eventError.message}`);
-    }
-
-    const { totalEchoes, totalRites } = await getTobyworldEchoTotals(supabase);
     const previewStreak =
       profile?.last_completed_on === today
         ? profile.streak_count ?? 1
-        : profile?.last_completed_on === getYesterdayUtc()
+        : profile?.last_completed_on === yesterday
           ? (profile.streak_count ?? 0) + 1
           : 1;
 
-    const multiplier = getRiteEchoMultiplier(previewStreak, totalEchoes);
+    const multiplier = getRiteEchoMultiplier(
+      previewStreak,
+      totals.totalEchoes,
+    );
 
     return json({
+      ok: true,
       fid: auth.fid,
       today,
       rite,
       completedToday: Boolean(todayEvent),
-      profile,
       todayEvent,
-      totalEchoes,
-      totalRites,
+      event: todayEvent,
+      totalEchoes: totals.totalEchoes,
+      totalRites: totals.totalRites,
       multiplier,
+      ...buildResponseProfile(profile, auth.fid),
     });
   } catch (error) {
     console.error('Daily rite GET failed:', error);
 
-    return json({ error: getErrorMessage(error) }, 500);
+    return json(
+      {
+        ok: false,
+        error: getErrorMessage(error),
+      },
+      500,
+    );
   }
 }
 
@@ -230,11 +339,18 @@ export async function POST(request: Request) {
     const auth = await requireFarcasterFid(request);
 
     if (!auth.ok) {
-      return json({ error: auth.error }, auth.status);
+      return json(
+        {
+          ok: false,
+          error: auth.error,
+        },
+        auth.status,
+      );
     }
 
     const body = await readBody(request);
     const profilePayload = body.profile ?? {};
+
     const username = cleanText(profilePayload.username, 80);
     const displayName = cleanText(profilePayload.displayName, 120);
     const pfpUrl = cleanText(profilePayload.pfpUrl, 500);
@@ -244,20 +360,10 @@ export async function POST(request: Request) {
     const yesterday = getYesterdayUtc();
     const rite = pickRite(auth.fid, today);
 
-    const existingProfile = await getDailyProfile(auth.fid);
-
-    const { data: existingEvent, error: existingEventError } = await supabase
-      .from('tobyworld_rite_events')
-      .select(
-        'id, fid, rite_date, rite_key, mark, share_text, completed_at, streak_count, total_completions, echo_power, multiplier_cap',
-      )
-      .eq('fid', auth.fid)
-      .eq('rite_date', today)
-      .maybeSingle<RiteEventRow>();
-
-    if (existingEventError) {
-      throw new Error(`Daily rite event check failed: ${existingEventError.message}`);
-    }
+    const [existingProfile, existingEvent] = await Promise.all([
+      getDailyProfile(auth.fid),
+      getTodayEvent(auth.fid, today),
+    ]);
 
     if (existingEvent) {
       const updateProfile = {
@@ -267,39 +373,87 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       };
 
-      await supabase.from('tobyworld_daily_rites').update(updateProfile).eq('fid', auth.fid);
+      const { data: refreshedProfile, error: updateError } = await supabase
+        .from('tobyworld_daily_rites')
+        .update(updateProfile)
+        .eq('fid', auth.fid)
+        .select(
+          [
+            'fid',
+            'streak_count',
+            'best_streak',
+            'total_completions',
+            'last_completed_on',
+            'current_mark',
+            'username',
+            'display_name',
+            'pfp_url',
+            'current_echo_power',
+            'highest_echo_power',
+          ].join(', '),
+        )
+        .single<DailyRiteRow>();
 
-      const { totalEchoes, totalRites } = await getTobyworldEchoTotals(supabase);
+      if (updateError) {
+        throw new Error(`Daily rite profile update failed: ${updateError.message}`);
+      }
+
+      const totals = await getTobyworldEchoTotals(supabase);
+      const eventEchoPower =
+        existingEvent.echo_power ??
+        refreshedProfile.current_echo_power ??
+        1;
 
       return json({
+        ok: true,
         fid: auth.fid,
         today,
         rite,
         completedToday: true,
         alreadyCompleted: true,
         event: existingEvent,
-        profile: {
-          ...existingProfile,
-          ...updateProfile,
-        },
-        totalEchoes,
-        totalRites,
-        multiplier: getRiteEchoMultiplier(existingEvent.streak_count ?? 1, totalEchoes),
+        todayEvent: existingEvent,
+        shareText: existingEvent.share_text,
+        totalEchoes: totals.totalEchoes,
+        totalRites: totals.totalRites,
+        multiplier: getRiteEchoMultiplier(
+          existingEvent.streak_count ??
+            refreshedProfile.streak_count ??
+            1,
+          totals.totalEchoes,
+        ),
+        echoPower: eventEchoPower,
+        ...buildResponseProfile(refreshedProfile, auth.fid),
       });
     }
 
     const previousStreak = existingProfile?.streak_count ?? 0;
-    const nextStreak =
-      existingProfile?.last_completed_on === yesterday ? previousStreak + 1 : 1;
 
-    const nextTotalCompletions = (existingProfile?.total_completions ?? 0) + 1;
-    const nextBestStreak = Math.max(existingProfile?.best_streak ?? 0, nextStreak);
+    const nextStreak =
+      existingProfile?.last_completed_on === yesterday
+        ? previousStreak + 1
+        : 1;
+
+    const nextTotalCompletions =
+      (existingProfile?.total_completions ?? 0) + 1;
+
+    const nextBestStreak = Math.max(
+      existingProfile?.best_streak ?? 0,
+      nextStreak,
+    );
+
     const mark = getMark(nextStreak);
 
-    const { totalEchoes: totalEchoesBefore } = await getTobyworldEchoTotals(supabase);
-    const multiplier = getRiteEchoMultiplier(nextStreak, totalEchoesBefore);
+    const totalsBefore = await getTobyworldEchoTotals(supabase);
+
+    const multiplier = getRiteEchoMultiplier(
+      nextStreak,
+      totalsBefore.totalEchoes,
+    );
+
     const echoPower = multiplier.echoPower;
     const shareText = buildShareText(mark, nextStreak, echoPower);
+    const updatedAt = new Date().toISOString();
 
     const dailyProfilePayload = {
       fid: auth.fid,
@@ -312,15 +466,32 @@ export async function POST(request: Request) {
       display_name: displayName ?? existingProfile?.display_name ?? null,
       pfp_url: pfpUrl ?? existingProfile?.pfp_url ?? null,
       current_echo_power: echoPower,
-      highest_echo_power: Math.max(existingProfile?.highest_echo_power ?? 1, echoPower),
-      updated_at: new Date().toISOString(),
+      highest_echo_power: Math.max(
+        existingProfile?.highest_echo_power ?? 1,
+        echoPower,
+      ),
+      updated_at: updatedAt,
     };
 
     const { data: savedProfile, error: profileError } = await supabase
       .from('tobyworld_daily_rites')
-      .upsert(dailyProfilePayload, { onConflict: 'fid' })
+      .upsert(dailyProfilePayload, {
+        onConflict: 'fid',
+      })
       .select(
-        'fid, streak_count, best_streak, total_completions, last_completed_on, current_mark, username, display_name, pfp_url, current_echo_power, highest_echo_power',
+        [
+          'fid',
+          'streak_count',
+          'best_streak',
+          'total_completions',
+          'last_completed_on',
+          'current_mark',
+          'username',
+          'display_name',
+          'pfp_url',
+          'current_echo_power',
+          'highest_echo_power',
+        ].join(', '),
       )
       .single<DailyRiteRow>();
 
@@ -345,32 +516,96 @@ export async function POST(request: Request) {
         multiplier_cap: multiplier.cap,
       })
       .select(
-        'id, fid, rite_date, rite_key, mark, share_text, completed_at, streak_count, total_completions, echo_power, multiplier_cap',
+        [
+          'id',
+          'fid',
+          'rite_date',
+          'rite_key',
+          'mark',
+          'share_text',
+          'completed_at',
+          'streak_count',
+          'total_completions',
+          'echo_power',
+          'multiplier_cap',
+        ].join(', '),
       )
       .single<RiteEventRow>();
 
     if (eventError) {
+      /*
+       * The profile was already saved. If another request created today's event
+       * between the checks, return the authoritative database state rather than
+       * showing zeroes or failing the UI.
+       */
+      if (eventError.code === '23505') {
+        const [authoritativeProfile, authoritativeEvent, totals] =
+          await Promise.all([
+            getDailyProfile(auth.fid),
+            getTodayEvent(auth.fid, today),
+            getTobyworldEchoTotals(supabase),
+          ]);
+
+        if (!authoritativeEvent) {
+          throw new Error(
+            `Daily rite event save failed: ${eventError.message}`,
+          );
+        }
+
+        return json({
+          ok: true,
+          fid: auth.fid,
+          today,
+          rite,
+          completedToday: true,
+          alreadyCompleted: true,
+          event: authoritativeEvent,
+          todayEvent: authoritativeEvent,
+          shareText: authoritativeEvent.share_text,
+          totalEchoes: totals.totalEchoes,
+          totalRites: totals.totalRites,
+          multiplier: getRiteEchoMultiplier(
+            authoritativeProfile?.streak_count ?? nextStreak,
+            totals.totalEchoes,
+          ),
+          echoPower:
+            authoritativeEvent.echo_power ??
+            authoritativeProfile?.current_echo_power ??
+            echoPower,
+          ...buildResponseProfile(authoritativeProfile, auth.fid),
+        });
+      }
+
       throw new Error(`Daily rite event save failed: ${eventError.message}`);
     }
 
-    const { totalEchoes, totalRites } = await getTobyworldEchoTotals(supabase);
+    const totals = await getTobyworldEchoTotals(supabase);
 
     return json({
+      ok: true,
       fid: auth.fid,
       today,
       rite,
       completedToday: true,
       alreadyCompleted: false,
       event,
-      profile: savedProfile,
+      todayEvent: event,
       shareText,
-      totalEchoes,
-      totalRites,
+      totalEchoes: totals.totalEchoes,
+      totalRites: totals.totalRites,
       multiplier,
+      echoPower,
+      ...buildResponseProfile(savedProfile, auth.fid),
     });
   } catch (error) {
     console.error('Daily rite POST failed:', error);
 
-    return json({ error: getErrorMessage(error) }, 500);
+    return json(
+      {
+        ok: false,
+        error: getErrorMessage(error),
+      },
+      500,
+    );
   }
 }
