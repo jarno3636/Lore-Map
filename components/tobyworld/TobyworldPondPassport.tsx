@@ -85,6 +85,14 @@ type WalletSupportResponse = {
   }>;
 };
 
+type PassportShareCreateResponse = {
+  ok?: boolean;
+  id?: string;
+  shareUrl?: string;
+  imageUrl?: string;
+  error?: string;
+};
+
 type TobyworldAsset = (typeof TOBYWORLD_SWAP_TOKENS)[number];
 
 type FileShareData = {
@@ -378,20 +386,6 @@ function pickBackupFrogImage(seed: string | number | undefined) {
   return PASSPORT_FROG_BACKUPS[Math.abs(hash) % PASSPORT_FROG_BACKUPS.length];
 }
 
-function getSafePhotoUrl(photoSrc?: string) {
-  if (!photoSrc) return undefined;
-
-  if (!photoSrc.startsWith('/images/passport/')) {
-    return undefined;
-  }
-
-  try {
-    return new URL(photoSrc, getPublicOrigin()).toString();
-  } catch {
-    return undefined;
-  }
-}
-
 function getRenderedMark({
   snapshot,
   isFarcasterSession,
@@ -404,106 +398,6 @@ function getRenderedMark({
   }
 
   return snapshot?.currentMark ?? 'Unstamped Frog';
-}
-
-function getPassportImageUrl({
-  persona,
-  snapshot,
-  contextUser,
-  address,
-  photoSrc,
-  heldAssets,
-  source,
-  isFarcasterSession,
-  compact = false,
-}: {
-  persona: PondPersona;
-  snapshot?: PassportSnapshot;
-  contextUser: MiniAppUserContext | null;
-  address?: string;
-  photoSrc?: string;
-  heldAssets: TobyworldAsset[];
-  source?: string;
-  isFarcasterSession: boolean;
-  compact?: boolean;
-}) {
-  const url = new URL('/api/tobyworld/passport-image', getPublicOrigin());
-
-  const title = compact ? compactText(persona.title, 54) : compactText(persona.title, 72);
-  const characteristic = compact
-    ? compactText(persona.characteristic, 80)
-    : compactText(persona.characteristic, 140);
-  const name = compact
-    ? compactText(getDisplayName(snapshot, contextUser, address), 40)
-    : compactText(getDisplayName(snapshot, contextUser, address), 52);
-  const handle = compact
-    ? compactText(getHandle(snapshot, contextUser, address), 36)
-    : compactText(getHandle(snapshot, contextUser, address), 52);
-  const mark = compact
-    ? compactText(getRenderedMark({ snapshot, isFarcasterSession }), 36)
-    : compactText(getRenderedMark({ snapshot, isFarcasterSession }), 42);
-
-  url.searchParams.set('title', title);
-  url.searchParams.set('characteristic', characteristic);
-  url.searchParams.set('name', name);
-  url.searchParams.set('handle', handle);
-  url.searchParams.set('mark', mark);
-  url.searchParams.set('streak', `${formatNumber(snapshot?.streakCount)}d`);
-  url.searchParams.set('rites', formatNumber(snapshot?.totalCompletions));
-  url.searchParams.set('power', `${formatNumber(snapshot?.currentEchoPower)}x`);
-  url.searchParams.set('assets', `${heldAssets.length}/${TOTAL_ASSET_COUNT}`);
-  url.searchParams.set('stamp', compact ? '△ · 🐸 · 🍃' : persona.stamp);
-  url.searchParams.set(
-    'mode',
-    source === 'wallet' && !isFarcasterSession ? 'WALLET SUPPORTER' : 'APPROVED',
-  );
-
-  const safePhoto = getSafePhotoUrl(photoSrc);
-
-  if (safePhoto && !compact) {
-    url.searchParams.set('photo', safePhoto);
-  }
-
-  return url.toString();
-}
-
-function getPassportShareUrl({
-  persona,
-  snapshot,
-  contextUser,
-  address,
-  heldAssets,
-  source,
-  isFarcasterSession,
-}: {
-  persona: PondPersona;
-  snapshot?: PassportSnapshot;
-  contextUser: MiniAppUserContext | null;
-  address?: string;
-  heldAssets: TobyworldAsset[];
-  source?: string;
-  isFarcasterSession: boolean;
-}) {
-  const imageUrl = getPassportImageUrl({
-    persona,
-    snapshot,
-    contextUser,
-    address,
-    photoSrc: undefined,
-    heldAssets,
-    source,
-    isFarcasterSession,
-    compact: true,
-  });
-
-  const shareUrl = new URL('/api/tobyworld/passport-share', getPublicOrigin());
-  const parsedImageUrl = new URL(imageUrl);
-
-  parsedImageUrl.searchParams.forEach((value, key) => {
-    shareUrl.searchParams.set(key, value);
-  });
-
-  return shareUrl.toString();
 }
 
 function getDynamicPassportCastText({
@@ -579,6 +473,7 @@ export function TobyworldPondPassport() {
   const [isRerolling, setIsRerolling] = useState(false);
   const [isSupporting, setIsSupporting] = useState(false);
   const [isCreatingImage, setIsCreatingImage] = useState(false);
+  const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [freshInkKey, setFreshInkKey] = useState(0);
   const [pfpFailed, setPfpFailed] = useState(false);
@@ -606,6 +501,11 @@ export function TobyworldPondPassport() {
   const assetCount = heldAssets.length;
   const hasEnoughAssets = assetCount >= REQUIRED_ASSET_COUNT;
   const canUsePassport = Boolean(isConnected && address && hasEnoughAssets);
+
+  const renderedMark = getRenderedMark({
+    snapshot,
+    isFarcasterSession,
+  });
 
   const stats = useMemo(
     () => [
@@ -725,6 +625,7 @@ export function TobyworldPondPassport() {
     try {
       await connectAsync({ connector: preferredConnector });
       setNotice('Wallet connected. Checking Tobyworld assets…');
+
       window.setTimeout(() => {
         void checkWalletAssets();
       }, 600);
@@ -918,36 +819,6 @@ export function TobyworldPondPassport() {
     }
   }
 
-  function buildImageUrl() {
-    if (!persona) return null;
-
-    return getPassportImageUrl({
-      persona,
-      snapshot,
-      contextUser,
-      address,
-      photoSrc: sharePhotoSrc,
-      heldAssets,
-      source: data?.source,
-      isFarcasterSession,
-      compact: false,
-    });
-  }
-
-  function buildShareUrl() {
-    if (!persona) return null;
-
-    return getPassportShareUrl({
-      persona,
-      snapshot,
-      contextUser,
-      address,
-      heldAssets,
-      source: data?.source,
-      isFarcasterSession,
-    });
-  }
-
   function buildCastText() {
     if (!persona) return '';
 
@@ -962,17 +833,58 @@ export function TobyworldPondPassport() {
     });
   }
 
+  async function createPassportShareLinks() {
+    if (!persona) {
+      throw new Error('No passport is ready to share.');
+    }
+
+    const payload = {
+      title: compactText(persona.title, 72),
+      characteristic: compactText(persona.characteristic, 150),
+      name: compactText(getDisplayName(snapshot, contextUser, address), 52),
+      handle: compactText(getHandle(snapshot, contextUser, address), 52),
+      mark: compactText(renderedMark, 42),
+      streak: `${formatNumber(snapshot?.streakCount)}d`,
+      rites: formatNumber(snapshot?.totalCompletions),
+      power: `${formatNumber(snapshot?.currentEchoPower)}x`,
+      assets: `${heldAssets.length}/${TOTAL_ASSET_COUNT}`,
+      stamp: persona.stamp,
+      mode: data?.source === 'wallet' && !isFarcasterSession ? 'WALLET SUPPORTER' : 'APPROVED',
+      photo: sharePhotoSrc,
+    };
+
+    const response = await fetch('/api/tobyworld/passport-share/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+      body: JSON.stringify(payload),
+    });
+
+    const result = (await response.json()) as PassportShareCreateResponse;
+
+    if (!response.ok || !result.ok || !result.shareUrl || !result.imageUrl) {
+      throw new Error(result.error || 'Unable to create passport share.');
+    }
+
+    return {
+      shareUrl: result.shareUrl,
+      imageUrl: result.imageUrl,
+    };
+  }
+
   async function sharePassport() {
     if (!persona) return;
 
-    const shareUrl = buildShareUrl();
-
-    if (!shareUrl) return;
-
-    const text = buildCastText();
-    const composeCast = (sdk as PassportSdk).actions?.composeCast;
-
     try {
+      setIsCreatingShare(true);
+      setNotice(null);
+
+      const { shareUrl } = await createPassportShareLinks();
+      const text = buildCastText();
+      const composeCast = (sdk as PassportSdk).actions?.composeCast;
+
       if (composeCast) {
         await Promise.resolve(
           composeCast({
@@ -991,54 +903,62 @@ export function TobyworldPondPassport() {
 
       await openExternalUrl(warpcastUrl.toString());
       setNotice('Cast composer opened.');
-    } catch {
-      const copied = await copyText(`${text}\n\n${shareUrl}`);
-      setNotice(copied ? 'Passport cast text and share card copied.' : text);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to share passport.');
+    } finally {
+      setIsCreatingShare(false);
     }
   }
 
   async function shareToX() {
     if (!persona) return;
 
-    const shareUrl = buildShareUrl();
+    try {
+      setIsCreatingShare(true);
+      setNotice(null);
 
-    if (!shareUrl) return;
+      const { shareUrl } = await createPassportShareLinks();
+      const text = buildCastText();
 
-    const text = buildCastText();
+      const url = new URL('https://twitter.com/intent/tweet');
+      url.searchParams.set('text', text);
+      url.searchParams.set('url', shareUrl);
 
-    const url = new URL('https://twitter.com/intent/tweet');
-    url.searchParams.set('text', text);
-    url.searchParams.set('url', shareUrl);
-
-    await openExternalUrl(url.toString());
+      await openExternalUrl(url.toString());
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to share passport.');
+    } finally {
+      setIsCreatingShare(false);
+    }
   }
 
   async function copyPassport() {
     if (!persona) return;
 
-    const shareUrl = buildShareUrl();
+    try {
+      setIsCreatingShare(true);
+      setNotice(null);
 
-    if (!shareUrl) return;
+      const { shareUrl } = await createPassportShareLinks();
+      const text = buildCastText();
 
-    const text = buildCastText();
-
-    const copied = await copyText(`${text}\n\n${shareUrl}`);
-    setNotice(copied ? 'Passport text and share card copied.' : persona.shareText);
+      const copied = await copyText(`${text}\n\n${shareUrl}`);
+      setNotice(copied ? 'Passport text and share card copied.' : persona.shareText);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to copy passport.');
+    } finally {
+      setIsCreatingShare(false);
+    }
   }
 
   async function sharePassportImage() {
     if (!persona) return;
 
-    const imageUrl = buildImageUrl();
-
-    if (!imageUrl) {
-      setNotice('Unable to build passport image URL.');
-      return;
-    }
-
     try {
       setIsCreatingImage(true);
       setNotice(null);
+
+      const { imageUrl } = await createPassportShareLinks();
 
       const response = await fetch(imageUrl, {
         method: 'GET',
@@ -1104,22 +1024,11 @@ export function TobyworldPondPassport() {
 
       setNotice('Passport image download started.');
     } catch (error) {
-      const copied = await copyText(imageUrl);
-
-      setNotice(
-        error instanceof Error
-          ? `${error.message}${copied ? ' Image link copied instead.' : ''}`
-          : 'Unable to create passport image.',
-      );
+      setNotice(error instanceof Error ? error.message : 'Unable to create passport image.');
     } finally {
       setIsCreatingImage(false);
     }
   }
-
-  const renderedMark = getRenderedMark({
-    snapshot,
-    isFarcasterSession,
-  });
 
   return (
     <section className="pond-passport" aria-label="Tobyworld Pond Passport">
@@ -1329,12 +1238,20 @@ export function TobyworldPondPassport() {
           </button>
         ) : null}
 
-        <button type="button" onClick={() => void sharePassport()} disabled={!persona}>
-          Cast
+        <button
+          type="button"
+          onClick={() => void sharePassport()}
+          disabled={!persona || isCreatingShare}
+        >
+          {isCreatingShare ? 'Preparing…' : 'Cast'}
         </button>
 
         {canUseWalletSupport && (
-          <button type="button" onClick={() => void shareToX()} disabled={!persona}>
+          <button
+            type="button"
+            onClick={() => void shareToX()}
+            disabled={!persona || isCreatingShare}
+          >
             X
           </button>
         )}
@@ -1347,7 +1264,11 @@ export function TobyworldPondPassport() {
           {isCreatingImage ? 'Making…' : 'Image'}
         </button>
 
-        <button type="button" onClick={() => void copyPassport()} disabled={!persona}>
+        <button
+          type="button"
+          onClick={() => void copyPassport()}
+          disabled={!persona || isCreatingShare}
+        >
           Copy
         </button>
 
