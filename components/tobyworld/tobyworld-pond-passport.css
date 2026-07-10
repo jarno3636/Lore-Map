@@ -16,7 +16,6 @@
     0 28px 70px rgba(0, 0, 0, 0.3);
 }
 
-.pond-passport,
 .pond-passport *,
 .pond-passport *::before,
 .pond-passport *::after {
@@ -44,31 +43,25 @@
   width: 280px;
   height: 280px;
   border-radius: 999px;
+  pointer-events: none;
   background: rgba(249, 201, 104, 0.14);
   filter: blur(18px);
-  pointer-events: none;
 }
 
 .pond-passport-toolbar,
 .pond-passport-gate,
-.pond-passport-wallet-strip,
 .pond-passport-card,
 .pond-passport-actions,
-.pond-passport-image-result,
 .pond-passport-notice {
   position: relative;
   z-index: 1;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Toolbar                                                                    */
-/* -------------------------------------------------------------------------- */
-
 .pond-passport-toolbar {
   display: flex;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
   margin-bottom: 10px;
 }
 
@@ -93,8 +86,8 @@
 .pond-passport-toolbar-chip {
   display: grid;
   min-width: 92px;
-  justify-items: end;
   gap: 2px;
+  justify-items: end;
   border: 1px solid rgba(146, 223, 241, 0.14);
   border-radius: 16px;
   padding: 9px 10px;
@@ -112,10 +105,6 @@
   font-size: 10px;
   font-weight: 850;
 }
-
-/* -------------------------------------------------------------------------- */
-/* Wallet gates and connector picker                                          */
-/* -------------------------------------------------------------------------- */
 
 .pond-passport-gate {
   display: grid;
@@ -144,10 +133,8 @@
   line-height: 1.45;
 }
 
-.pond-passport-gate button,
-.pond-passport-connector-list button {
-  width: 100%;
-  min-height: 42px;
+.pond-passport-gate button {
+  width: fit-content;
   border: 1px solid rgba(249, 201, 104, 0.2);
   border-radius: 14px;
   padding: 10px 13px;
@@ -158,74 +145,30 @@
   cursor: pointer;
 }
 
+.pond-passport-gate button:hover {
+  transform: translateY(-1px);
+}
+
+.pond-passport-gate button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
 .pond-passport-gate button.ghost {
   color: #d8d3bc;
   background: rgba(35, 28, 18, 0.54);
 }
 
-.pond-passport-gate button:disabled,
-.pond-passport-connector-list button:disabled {
-  cursor: not-allowed;
-  opacity: 0.52;
-}
-
-.pond-passport-connector-list {
+.pond-passport-connector-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 2px;
 }
 
-.pond-passport-wallet-strip {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 10px;
-  border: 1px solid rgba(143, 226, 244, 0.17);
-  border-radius: 17px;
-  padding: 11px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(141, 233, 255, 0.08), transparent 46%),
-    rgba(5, 24, 31, 0.72);
-}
-
-.pond-passport-wallet-strip > div {
+.pond-passport-connector-grid button {
+  width: 100%;
   min-width: 0;
-}
-
-.pond-passport-wallet-strip small,
-.pond-passport-wallet-strip strong {
-  display: block;
-}
-
-.pond-passport-wallet-strip small {
-  color: #91bbc4;
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-}
-
-.pond-passport-wallet-strip strong {
-  margin-top: 4px;
-  overflow: hidden;
-  color: #f5f0df;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pond-passport-wallet-strip button {
-  grid-column: 1 / -1;
-  min-height: 38px;
-  border: 1px solid rgba(146, 223, 241, 0.16);
-  border-radius: 12px;
-  padding: 8px 10px;
-  color: #b9d4da;
-  background: rgba(35, 28, 18, 0.5);
-  font-size: 11px;
-  font-weight: 900;
-  cursor: pointer;
 }
 
 .pond-passport-asset-pills {
@@ -249,10 +192,6 @@
   border-color: transparent;
   background: linear-gradient(135deg, #f8d77d, #8de9ff);
 }
-
-/* -------------------------------------------------------------------------- */
-/* Passport card                                                              */
-/* -------------------------------------------------------------------------- */
 
 .pond-passport-card {
   position: relative;
@@ -328,7 +267,6 @@
 }
 
 .pond-passport-photo img {
-  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -393,6 +331,7 @@
   font-size: clamp(30px, 8vw, 48px);
   line-height: 0.88;
   letter-spacing: -0.075em;
+  overflow-wrap: anywhere;
 }
 
 .pond-passport-title-block p {
@@ -432,6 +371,7 @@
 }
 
 .pond-passport-stat-row div {
+  min-width: 0;
   border: 1px solid rgba(91, 53, 26, 0.14);
   border-radius: 14px;
   padding: 8px;
@@ -507,29 +447,28 @@
   letter-spacing: 0.16em;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Action buttons                                                             */
-/* -------------------------------------------------------------------------- */
-
 .pond-passport-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 7px;
   margin-top: 10px;
 }
 
 .pond-passport-actions button {
   min-width: 0;
-  min-height: 42px;
   border: 1px solid rgba(249, 201, 104, 0.2);
   border-radius: 14px;
-  padding: 10px 7px;
+  padding: 11px 8px;
   color: #d8d3bc;
   background: rgba(35, 28, 18, 0.54);
   font-size: 11px;
   font-weight: 950;
-  line-height: 1.1;
   cursor: pointer;
+}
+
+.pond-passport-actions button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(141, 233, 255, 0.28);
 }
 
 .pond-passport-actions button.primary {
@@ -544,58 +483,8 @@
 .pond-passport-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
+  transform: none;
 }
-
-/* -------------------------------------------------------------------------- */
-/* Generated image result                                                     */
-/* -------------------------------------------------------------------------- */
-
-.pond-passport-image-result {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-  border: 1px solid rgba(141, 233, 255, 0.2);
-  border-radius: 17px;
-  padding: 13px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(141, 233, 255, 0.12), transparent 42%),
-    rgba(5, 24, 31, 0.8);
-}
-
-.pond-passport-image-result strong {
-  color: #fff8e6;
-  font-family: Georgia, serif;
-  font-size: 17px;
-}
-
-.pond-passport-image-result p {
-  margin: 0;
-  color: #a9c8cf;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.pond-passport-image-result a,
-.pond-passport-image-result button {
-  display: inline-flex;
-  min-height: 42px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(141, 233, 255, 0.2);
-  border-radius: 12px;
-  padding: 9px 12px;
-  color: #e5faff;
-  background: rgba(19, 65, 77, 0.55);
-  font-size: 12px;
-  font-weight: 900;
-  text-align: center;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Notices                                                                    */
-/* -------------------------------------------------------------------------- */
 
 .pond-passport-notice {
   margin: 10px 0 0;
@@ -608,41 +497,13 @@
   line-height: 1.35;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Responsive                                                                 */
-/* -------------------------------------------------------------------------- */
-
-@media (min-width: 520px) {
-  .pond-passport-connector-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .pond-passport-image-result {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .pond-passport-image-result strong,
-  .pond-passport-image-result p {
-    grid-column: 1 / -1;
-  }
-}
-
 @media (min-width: 620px) {
   .pond-passport-trait-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .pond-passport-wallet-strip {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  }
-
-  .pond-passport-wallet-strip button {
-    grid-column: auto;
-    width: auto;
-  }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 720px) {
   .pond-passport-actions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -663,13 +524,17 @@
     padding: 8px;
   }
 
+  .pond-passport-connector-grid {
+    grid-template-columns: 1fr;
+  }
+
   .pond-passport-card {
     padding: 12px;
     border-radius: 21px;
   }
 
   .pond-passport-card-head {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto 1fr;
   }
 
   .pond-passport-mini-stamp {
@@ -705,43 +570,7 @@
   .pond-passport-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .pond-passport-wallet-strip {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .pond-passport-wallet-strip button {
-    grid-column: 1 / -1;
-  }
 }
-
-@media (max-width: 370px) {
-  .pond-passport-toolbar {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .pond-passport-toolbar-chip {
-    width: 100%;
-    justify-items: start;
-  }
-
-  .pond-passport-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .pond-passport-wallet-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .pond-passport-wallet-strip button {
-    grid-column: auto;
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Animation                                                                  */
-/* -------------------------------------------------------------------------- */
 
 @keyframes pond-passport-fresh-ink {
   from {
@@ -758,5 +587,10 @@
 @media (prefers-reduced-motion: reduce) {
   .pond-passport-card {
     animation: none;
+  }
+
+  .pond-passport-gate button,
+  .pond-passport-actions button {
+    transition: none;
   }
 }
