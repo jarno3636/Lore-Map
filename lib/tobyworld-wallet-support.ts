@@ -3,8 +3,9 @@ import {
   getAddress,
   http,
   isAddress,
-  verifyMessage,
+  isHex,
   type Address,
+  type Hex,
 } from 'viem';
 import { base } from 'viem/chains';
 import { TOBYWORLD_SWAP_TOKENS } from '@/lib/tobyworld-swap-tokens';
@@ -12,7 +13,7 @@ import { getTodayUtcDate } from '@/lib/tobyworld-pond-passport';
 
 export type WalletSupportPayload = {
   walletAddress: string;
-  signature: `0x${string}`;
+  signature: Hex;
   message: string;
 };
 
@@ -37,15 +38,26 @@ const REQUIRED_ASSET_COUNT = 2;
 
 const baseClient = createPublicClient({
   chain: base,
-  transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org'),
+  transport: http(
+    process.env.BASE_RPC_URL ||
+      process.env.NEXT_PUBLIC_BASE_RPC_URL ||
+      'https://mainnet.base.org',
+  ),
 });
 
 export function getRequestDomain(request: Request) {
-  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const host = forwardedHost ?? request.headers.get('host');
 
-  if (host) return host;
+  if (host) {
+    return host.split(',')[0]?.trim() || host;
+  }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://toby-atlas.vercel.app';
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    'https://toby-atlas.vercel.app';
+
   return new URL(appUrl).host;
 }
 
@@ -94,15 +106,24 @@ async function getHeldTobyworldAssets(
 
   return results
     .map((result): HeldTobyworldSupportAsset | null => {
-      if (result.status !== 'fulfilled') return null;
-      if (result.value.balance <= BigInt(0)) return null;
+      if (result.status !== 'fulfilled') {
+        return null;
+      }
+
+      if (result.value.balance <= 0n) {
+        return null;
+      }
 
       return {
         id: result.value.token.id,
         symbol: result.value.token.symbol,
       };
     })
-    .filter((asset): asset is HeldTobyworldSupportAsset => asset !== null);
+    .filter(
+      (
+        asset,
+      ): asset is HeldTobyworldSupportAsset => asset !== null,
+    );
 }
 
 export async function verifyWalletSupportPayload({
@@ -120,6 +141,29 @@ export async function verifyWalletSupportPayload({
     };
   }
 
+  if (
+    typeof payload.message !== 'string' ||
+    !payload.message.trim()
+  ) {
+    return {
+      ok: false as const,
+      error: 'The signed message is missing.',
+      heldAssets: [] as HeldTobyworldSupportAsset[],
+    };
+  }
+
+  if (
+    typeof payload.signature !== 'string' ||
+    !isHex(payload.signature) ||
+    payload.signature.length <= 2
+  ) {
+    return {
+      ok: false as const,
+      error: 'The wallet returned an invalid signature.',
+      heldAssets: [] as HeldTobyworldSupportAsset[],
+    };
+  }
+
   const walletAddress = getAddress(payload.walletAddress);
 
   const expectedMessage = buildWalletSupportMessage({
@@ -130,16 +174,37 @@ export async function verifyWalletSupportPayload({
   if (payload.message !== expectedMessage) {
     return {
       ok: false as const,
-      error: 'The signed message does not match today’s pond rite.',
+      error:
+        'The signed message does not match today’s pond rite.',
       heldAssets: [] as HeldTobyworldSupportAsset[],
     };
   }
 
-  const valid = await verifyMessage({
-    address: walletAddress,
-    message: payload.message,
-    signature: payload.signature,
-  });
+  let valid = false;
+
+  try {
+    /*
+     * PublicClient verification supports both ordinary EOAs and smart
+     * contract accounts such as Base Account.
+     */
+    valid = await baseClient.verifyMessage({
+      address: walletAddress,
+      message: payload.message,
+      signature: payload.signature,
+    });
+  } catch (error) {
+    console.error(
+      'Wallet support signature verification failed:',
+      error,
+    );
+
+    return {
+      ok: false as const,
+      error:
+        'Wallet signature verification failed. Reconnect the wallet and sign again.',
+      heldAssets: [] as HeldTobyworldSupportAsset[],
+    };
+  }
 
   if (!valid) {
     return {
@@ -149,7 +214,8 @@ export async function verifyWalletSupportPayload({
     };
   }
 
-  const heldAssets = await getHeldTobyworldAssets(walletAddress);
+  const heldAssets =
+    await getHeldTobyworldAssets(walletAddress);
 
   if (heldAssets.length < REQUIRED_ASSET_COUNT) {
     return {
