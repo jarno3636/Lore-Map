@@ -41,6 +41,8 @@ export async function POST(request: Request) {
       },
     );
   } catch (error) {
+    console.error('Passport share create failed:', error);
+
     return NextResponse.json(
       {
         ok: false,
