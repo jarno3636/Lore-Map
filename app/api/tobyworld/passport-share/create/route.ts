@@ -2,10 +2,23 @@ import { NextResponse } from 'next/server';
 import {
   cleanPassportSharePayload,
   createPassportShare,
+  getPassportShare,
 } from '@/lib/tobyworld-passport-share';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+function json(
+  data: unknown,
+  status = 200,
+) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      'Cache-Control': 'no-store, max-age=0',
+    },
+  });
+}
 
 function getPublicOrigin(request: Request) {
   const configuredOrigin = (
@@ -45,23 +58,23 @@ async function readBody(request: Request) {
   }
 }
 
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, {
-    status,
-    headers: {
-      'Cache-Control': 'no-store',
-    },
-  });
-}
-
 export async function POST(request: Request) {
   try {
     const body = await readBody(request);
-    const payload =
-      cleanPassportSharePayload(body);
+    const payload = cleanPassportSharePayload(body);
 
-    const id =
-      await createPassportShare(payload);
+    const id = await createPassportShare(payload);
+
+    /*
+     * Final route-level read check. Do not give the client a broken URL.
+     */
+    const storedPayload = await getPassportShare(id);
+
+    if (!storedPayload) {
+      throw new Error(
+        'Passport share was created but could not be retrieved.',
+      );
+    }
 
     const origin = getPublicOrigin(request);
 
@@ -71,17 +84,18 @@ export async function POST(request: Request) {
     const imageUrl =
       `${origin}/api/tobyworld/passport-image/${id}`;
 
+    const downloadUrl =
+      `${imageUrl}?download=1`;
+
     return json({
       ok: true,
       id,
       shareUrl,
       imageUrl,
+      downloadUrl,
     });
   } catch (error) {
-    console.error(
-      'Passport share create failed:',
-      error,
-    );
+    console.error('Passport share create failed:', error);
 
     return json(
       {
