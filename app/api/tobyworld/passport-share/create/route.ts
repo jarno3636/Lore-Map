@@ -1,27 +1,19 @@
 import { NextResponse } from 'next/server';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
 import {
   cleanPassportSharePayload,
-  createPassportShare,
-  getPassportShare,
+  createPassportShareId,
+  parsePassportPngDataUrl,
+  savePassportShare,
 } from '@/lib/tobyworld-passport-share';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function json(
-  data: unknown,
-  status = 200,
-) {
-  return NextResponse.json(data, {
-    status,
-    headers: {
-      'Cache-Control': 'no-store, max-age=0',
-    },
-  });
-}
+const STORAGE_BUCKET = 'passport-shares';
 
 function getPublicOrigin(request: Request) {
-  const configuredOrigin = (
+  const configured = (
     process.env.NEXT_PUBLIC_APP_URL ??
     process.env.NEXT_PUBLIC_SITE_URL ??
     ''
@@ -29,75 +21,78 @@ function getPublicOrigin(request: Request) {
     .trim()
     .replace(/\/+$/, '');
 
-  if (configuredOrigin) {
-    return configuredOrigin;
-  }
+  if (configured) return configured;
 
-  const forwardedHost = request.headers
-    .get('x-forwarded-host')
-    ?.split(',')[0]
-    ?.trim();
+  const host = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const protocol =
+    request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'https';
 
-  const forwardedProtocol = request.headers
-    .get('x-forwarded-proto')
-    ?.split(',')[0]
-    ?.trim();
-
-  if (forwardedHost) {
-    return `${forwardedProtocol || 'https'}://${forwardedHost}`;
-  }
-
-  return new URL(request.url).origin;
+  return host ? `${protocol}://${host}` : new URL(request.url).origin;
 }
 
 async function readBody(request: Request) {
   try {
-    return await request.json();
+    return (await request.json()) as {
+      payload?: unknown;
+      imageDataUrl?: unknown;
+    };
   } catch {
     return {};
   }
 }
 
 export async function POST(request: Request) {
+  const supabase = getSupabaseAdmin();
+  let storagePath: string | null = null;
+
   try {
     const body = await readBody(request);
-    const payload = cleanPassportSharePayload(body);
+    const payload = cleanPassportSharePayload(body.payload);
+    const png = parsePassportPngDataUrl(body.imageDataUrl);
+    const id = createPassportShareId();
 
-    const id = await createPassportShare(payload);
+    storagePath = `${id}.png`;
 
-    /*
-     * Final route-level read check. Do not give the client a broken URL.
-     */
-    const storedPayload = await getPassportShare(id);
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(storagePath, png, {
+        contentType: 'image/png',
+        cacheControl: '31536000',
+        upsert: false,
+      });
 
-    if (!storedPayload) {
-      throw new Error(
-        'Passport share was created but could not be retrieved.',
-      );
+    if (uploadError) {
+      throw new Error(`Passport image upload failed: ${uploadError.message}`);
     }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(storagePath);
+
+    const imageUrl = publicUrlData.publicUrl;
+    if (!imageUrl) throw new Error('Supabase did not return a public image URL.');
+
+    await savePassportShare({ id, payload, imageUrl });
 
     const origin = getPublicOrigin(request);
 
-    const shareUrl =
-      `${origin}/api/tobyworld/passport-share/${id}`;
-
-    const imageUrl =
-      `${origin}/api/tobyworld/passport-image/${id}`;
-
-    const downloadUrl =
-      `${imageUrl}?download=1`;
-
-    return json({
-      ok: true,
-      id,
-      shareUrl,
-      imageUrl,
-      downloadUrl,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        id,
+        shareUrl: `${origin}/api/tobyworld/passport-share/${id}`,
+        imageUrl,
+      },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (error) {
-    console.error('Passport share create failed:', error);
+    if (storagePath) {
+      await supabase.storage.from(STORAGE_BUCKET).remove([storagePath]);
+    }
 
-    return json(
+    console.error('Passport share creation failed:', error);
+
+    return NextResponse.json(
       {
         ok: false,
         error:
@@ -105,7 +100,7 @@ export async function POST(request: Request) {
             ? error.message
             : 'Unable to create passport share.',
       },
-      500,
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }
