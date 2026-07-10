@@ -454,7 +454,7 @@ function toBigIntBalance(value: unknown) {
     return BigInt(value);
   }
 
-  return 0n;
+  return BigInt(0);
 }
 
 function pickBackupFrogImage(
@@ -914,7 +914,7 @@ export function TobyworldPondPassport() {
                 result.value.balance,
               );
 
-            if (balance <= 0n) {
+            if (balance <= BigInt(0)) {
               return null;
             }
 
