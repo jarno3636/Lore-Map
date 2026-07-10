@@ -4,8 +4,17 @@ import { getPassportShare } from '@/lib/tobyworld-passport-share';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const IMAGE_WIDTH = 1200;
-const IMAGE_HEIGHT = 630;
+function getShareId(request: Request) {
+  const url = new URL(request.url);
+  const segments = url.pathname.split('/').filter(Boolean);
+  const shareId = segments.at(-1)?.trim().toLowerCase() ?? '';
+
+  if (!/^[a-z0-9]{8,32}$/.test(shareId)) {
+    return null;
+  }
+
+  return shareId;
+}
 
 function escapeHtml(value: string) {
   return value
@@ -16,16 +25,14 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;');
 }
 
-function normalizeOrigin(value: string) {
-  return value.trim().replace(/\/+$/, '');
-}
-
 function getPublicOrigin(request: Request) {
-  const configuredOrigin = normalizeOrigin(
+  const configuredOrigin = (
     process.env.NEXT_PUBLIC_APP_URL ??
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      '',
-  );
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    ''
+  )
+    .trim()
+    .replace(/\/+$/, '');
 
   if (configuredOrigin) {
     return configuredOrigin;
@@ -48,56 +55,63 @@ function getPublicOrigin(request: Request) {
   return new URL(request.url).origin;
 }
 
-function cleanShareId(value: string) {
-  return value.trim().toLowerCase();
+function textResponse(
+  message: string,
+  status: number,
+) {
+  return new NextResponse(message, {
+    status,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 }
 
-export async function GET(
-  request: Request,
-  context: {
-    params: Promise<{
-      shareId: string;
-    }>;
-  },
-) {
+export async function GET(request: Request) {
   try {
-    const { shareId: rawShareId } = await context.params;
-    const shareId = cleanShareId(rawShareId);
+    const shareId = getShareId(request);
+
+    if (!shareId) {
+      return textResponse(
+        'Invalid passport share ID.',
+        400,
+      );
+    }
+
     const payload = await getPassportShare(shareId);
 
     if (!payload) {
-      return new NextResponse('Passport share not found.', {
-        status: 404,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Cache-Control': 'no-store',
-          'X-Content-Type-Options': 'nosniff',
-        },
+      console.error('Passport share payload not found:', {
+        shareId,
+        pathname: new URL(request.url).pathname,
       });
+
+      return textResponse(
+        'Passport share not found.',
+        404,
+      );
     }
 
     const origin = getPublicOrigin(request);
 
-    const shareUrl = `${origin}/api/tobyworld/passport-share/${shareId}`;
-    const imageUrl = `${origin}/api/tobyworld/passport-image/${shareId}`;
-    const downloadUrl = `${imageUrl}?download=1`;
-    const appUrl = `${origin}/#pond-passport`;
-    const splashImageUrl = `${origin}/miniapp/tobyworld-app-icon.png`;
+    const shareUrl =
+      `${origin}/api/tobyworld/passport-share/${shareId}`;
 
-    const pageTitle = `${payload.name} · Tobyworld Pond Passport`;
+    const imageUrl =
+      `${origin}/api/tobyworld/passport-image/${shareId}`;
 
-    const socialTitle = `${payload.name} received a Tobyworld Pond Passport`;
+    const appUrl =
+      `${origin}/#pond-passport`;
 
-    const description = [
-      payload.title,
-      payload.mark,
-      'The pond remains professionally concerned.',
-    ].join(' · ');
+    const splashImageUrl =
+      `${origin}/miniapp/tobyworld-app-icon.png`;
 
-    /*
-     * Keep the embed URL short. All passport details live in Supabase behind
-     * the shareId, so Farcaster only needs this permanent share-page URL.
-     */
+    const description =
+      `${payload.title} · ${payload.mark} · ` +
+      'The pond remains professionally concerned.';
+
     const miniAppEmbed = {
       version: '1',
       imageUrl,
@@ -113,8 +127,26 @@ export async function GET(
       },
     };
 
-    const miniAppEmbedJson = JSON.stringify(miniAppEmbed);
-    const escapedEmbedJson = escapeHtml(miniAppEmbedJson);
+    const frameEmbed = {
+      version: 'next',
+      imageUrl,
+      button: {
+        title: 'Open Passport',
+        action: {
+          type: 'launch_frame',
+          name: 'Tobyworld Atlas',
+          url: appUrl,
+          splashImageUrl,
+          splashBackgroundColor: '#061419',
+        },
+      },
+    };
+
+    const miniAppEmbedJson =
+      JSON.stringify(miniAppEmbed);
+
+    const frameEmbedJson =
+      JSON.stringify(frameEmbed);
 
     const html = `<!doctype html>
 <html lang="en">
@@ -126,7 +158,7 @@ export async function GET(
       content="width=device-width, initial-scale=1"
     />
 
-    <title>${escapeHtml(pageTitle)}</title>
+    <title>${escapeHtml(payload.name)} · Tobyworld Pond Passport</title>
 
     <link
       rel="canonical"
@@ -136,11 +168,6 @@ export async function GET(
     <meta
       name="description"
       content="${escapeHtml(description)}"
-    />
-
-    <meta
-      name="theme-color"
-      content="#061419"
     />
 
     <meta
@@ -160,7 +187,7 @@ export async function GET(
 
     <meta
       property="og:title"
-      content="${escapeHtml(socialTitle)}"
+      content="${escapeHtml(payload.name)} received a Tobyworld Pond Passport"
     />
 
     <meta
@@ -170,11 +197,6 @@ export async function GET(
 
     <meta
       property="og:image"
-      content="${escapeHtml(imageUrl)}"
-    />
-
-    <meta
-      property="og:image:url"
       content="${escapeHtml(imageUrl)}"
     />
 
@@ -190,12 +212,12 @@ export async function GET(
 
     <meta
       property="og:image:width"
-      content="${IMAGE_WIDTH}"
+      content="1200"
     />
 
     <meta
       property="og:image:height"
-      content="${IMAGE_HEIGHT}"
+      content="630"
     />
 
     <meta
@@ -210,7 +232,7 @@ export async function GET(
 
     <meta
       name="twitter:title"
-      content="${escapeHtml(pageTitle)}"
+      content="${escapeHtml(payload.name)} · Tobyworld Pond Passport"
     />
 
     <meta
@@ -230,12 +252,12 @@ export async function GET(
 
     <meta
       name="fc:miniapp"
-      content="${escapedEmbedJson}"
+      content="${escapeHtml(miniAppEmbedJson)}"
     />
 
     <meta
       name="fc:frame"
-      content="${escapedEmbedJson}"
+      content="${escapeHtml(frameEmbedJson)}"
     />
   </head>
 
@@ -243,37 +265,22 @@ export async function GET(
     style="
       margin:0;
       min-height:100vh;
-      display:grid;
-      place-items:center;
-      padding:24px 0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:28px;
       box-sizing:border-box;
-      background:
-        radial-gradient(
-          circle at 15% 0%,
-          rgba(141,233,255,0.16),
-          transparent 32%
-        ),
-        radial-gradient(
-          circle at 88% 0%,
-          rgba(249,201,104,0.11),
-          transparent 34%
-        ),
-        linear-gradient(
-          180deg,
-          #061419,
-          #0a2229 58%,
-          #040c10
-        );
       color:#fff8e6;
+      background:
+        radial-gradient(circle at 12% 0%,rgba(141,233,255,0.18),transparent 34%),
+        radial-gradient(circle at 88% 0%,rgba(249,201,104,0.13),transparent 34%),
+        linear-gradient(135deg,#061419,#152217 52%,#352413);
       font-family:Arial,sans-serif;
     "
   >
     <main
       style="
-        width:min(92vw,920px);
-        margin:0 auto;
-        padding:22px;
-        box-sizing:border-box;
+        width:min(100%,900px);
         text-align:center;
       "
     >
@@ -288,20 +295,16 @@ export async function GET(
         <img
           src="${escapeHtml(imageUrl)}"
           alt="Tobyworld Pond Passport for ${escapeHtml(payload.name)}"
-          width="${IMAGE_WIDTH}"
-          height="${IMAGE_HEIGHT}"
+          width="1200"
+          height="630"
           style="
             display:block;
             width:100%;
             height:auto;
-            aspect-ratio:${IMAGE_WIDTH}/${IMAGE_HEIGHT};
-            object-fit:contain;
-            border:1px solid rgba(249,201,104,0.25);
-            border-radius:24px;
-            background:#061419;
-            box-shadow:
-              0 28px 76px rgba(0,0,0,0.42),
-              0 0 40px rgba(141,233,255,0.06);
+            border:1px solid rgba(249,201,104,0.3);
+            border-radius:28px;
+            background:#f4e1b3;
+            box-shadow:0 30px 82px rgba(0,0,0,0.42);
           "
         />
       </a>
@@ -312,7 +315,7 @@ export async function GET(
           color:#8de9ff;
           font-size:12px;
           font-weight:900;
-          letter-spacing:0.18em;
+          letter-spacing:0.19em;
           text-transform:uppercase;
         "
       >
@@ -325,8 +328,8 @@ export async function GET(
           color:#fff8e6;
           font-family:Georgia,serif;
           font-size:clamp(38px,7vw,68px);
-          line-height:0.94;
-          letter-spacing:-0.045em;
+          line-height:0.95;
+          letter-spacing:-0.04em;
         "
       >
         Tobyworld Pond Passport
@@ -335,26 +338,14 @@ export async function GET(
       <p
         style="
           max-width:650px;
-          margin:16px auto 0;
+          margin:15px auto 0;
           color:#c8e1e6;
           font-size:17px;
           line-height:1.5;
         "
       >
-        <strong style="color:#fff8e6;">
-          ${escapeHtml(payload.name)}
-        </strong>
-
-        ${
-          payload.handle
-            ? `<span style="color:#8de9ff;">
-                ${escapeHtml(payload.handle)}
-              </span>`
-            : ''
-        }
-
+        ${escapeHtml(payload.name)}
         received the title
-
         <strong style="color:#ffe3a0;">
           ${escapeHtml(payload.title)}
         </strong>.
@@ -365,7 +356,7 @@ export async function GET(
           display:flex;
           flex-wrap:wrap;
           justify-content:center;
-          gap:10px;
+          gap:11px;
           margin-top:24px;
         "
       >
@@ -373,19 +364,13 @@ export async function GET(
           href="${escapeHtml(appUrl)}"
           style="
             display:inline-flex;
-            min-height:46px;
+            min-height:48px;
             align-items:center;
             justify-content:center;
-            box-sizing:border-box;
             border-radius:999px;
-            padding:0 19px;
+            padding:0 20px;
             color:#061419;
-            background:linear-gradient(
-              135deg,
-              #f8d77d,
-              #8de9ff
-            );
-            box-shadow:0 14px 32px rgba(141,233,255,0.14);
+            background:linear-gradient(135deg,#f8d77d,#8de9ff);
             font-size:13px;
             font-weight:900;
             text-decoration:none;
@@ -395,59 +380,37 @@ export async function GET(
         </a>
 
         <a
-          href="${escapeHtml(downloadUrl)}"
-          download="tobyworld-pond-passport-${escapeHtml(shareId)}.png"
-          style="
-            display:inline-flex;
-            min-height:46px;
-            align-items:center;
-            justify-content:center;
-            box-sizing:border-box;
-            border:1px solid rgba(141,233,255,0.27);
-            border-radius:999px;
-            padding:0 19px;
-            color:#e5faff;
-            background:rgba(19,65,77,0.67);
-            font-size:13px;
-            font-weight:900;
-            text-decoration:none;
-          "
-        >
-          Download PNG
-        </a>
-
-        <a
           href="${escapeHtml(imageUrl)}"
+          target="_blank"
+          rel="noopener noreferrer"
           style="
             display:inline-flex;
-            min-height:46px;
+            min-height:48px;
             align-items:center;
             justify-content:center;
-            box-sizing:border-box;
-            border:1px solid rgba(249,201,104,0.24);
+            border:1px solid rgba(141,233,255,0.28);
             border-radius:999px;
-            padding:0 19px;
-            color:#ffe3a0;
-            background:rgba(75,54,25,0.48);
+            padding:0 20px;
+            color:#e5faff;
+            background:rgba(19,65,77,0.66);
             font-size:13px;
             font-weight:900;
             text-decoration:none;
           "
         >
-          Open Full Image
+          Open PNG
         </a>
       </div>
 
       <p
         style="
-          max-width:560px;
-          margin:18px auto 0;
-          color:#789ba3;
+          margin:18px 0 0;
+          color:#7fa8b1;
           font-size:12px;
-          line-height:1.5;
+          line-height:1.45;
         "
       >
-        On iPhone, open the full image and long-press it to save it to Photos.
+        Open the PNG, then long-press the image to save it on mobile.
       </p>
     </main>
   </body>
@@ -458,20 +421,16 @@ export async function GET(
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control':
-          'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800',
+          'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
         'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (error) {
     console.error('Passport share page failed:', error);
 
-    return new NextResponse('Passport share unavailable.', {
-      status: 500,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Content-Type-Options': 'nosniff',
-      },
-    });
+    return textResponse(
+      'Passport share unavailable.',
+      500,
+    );
   }
 }
