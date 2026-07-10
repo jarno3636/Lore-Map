@@ -11,7 +11,6 @@ import {
   baseAccount,
   injected,
   walletConnect,
-  type CreateConnectorFn,
 } from 'wagmi/connectors';
 import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector';
 
@@ -26,8 +25,7 @@ const APP_URL = (
   'http://localhost:3000'
 ).replace(/\/+$/, '');
 
-const APP_ICON_URL =
-  `${APP_URL}/miniapp/tobyworld-app-icon.png`;
+const APP_ICON_URL = `${APP_URL}/miniapp/tobyworld-app-icon.png`;
 
 const BASE_RPC_URL =
   process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() ||
@@ -36,15 +34,15 @@ const BASE_RPC_URL =
 const WALLETCONNECT_PROJECT_ID =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim();
 
-function getConnectors(): CreateConnectorFn[] {
-  const connectors: CreateConnectorFn[] = [
+function getConnectors() {
+  const connectors = [
     /*
-     * Used by Farcaster-compatible Mini App clients.
+     * Farcaster Mini App wallet.
      */
     farcasterMiniApp(),
 
     /*
-     * Works on standard web and provides Base Account/passkey access.
+     * Base Account / smart-wallet connection.
      */
     baseAccount({
       appName: APP_NAME,
@@ -52,8 +50,8 @@ function getConnectors(): CreateConnectorFn[] {
     }),
 
     /*
-     * Works inside MetaMask, Coinbase Wallet, Base App, Rabby,
-     * Rainbow and other injected wallet browsers.
+     * Injected wallet providers such as MetaMask,
+     * Coinbase Wallet, Base App, Rabby, and Rainbow.
      */
     injected({
       shimDisconnect: true,
@@ -61,8 +59,8 @@ function getConnectors(): CreateConnectorFn[] {
   ];
 
   /*
-   * WalletConnect is needed for ordinary mobile Safari/Chrome users who
-   * need to open an external wallet application.
+   * WalletConnect is optional.
+   * It is only added when a project ID exists.
    */
   if (WALLETCONNECT_PROJECT_ID) {
     connectors.push(
@@ -85,7 +83,9 @@ function getConnectors(): CreateConnectorFn[] {
 export function getWagmiConfig() {
   return createConfig({
     chains: [base],
+
     ssr: true,
+
     multiInjectedProviderDiscovery: true,
 
     storage: createStorage({
@@ -102,10 +102,11 @@ export function getWagmiConfig() {
 }
 
 export const wagmiConfig = getWagmiConfig();
+
 export const config = wagmiConfig;
 
 declare module 'wagmi' {
   interface Register {
-    config: ReturnType<typeof getWagmiConfig>;
+    config: typeof wagmiConfig;
   }
 }
