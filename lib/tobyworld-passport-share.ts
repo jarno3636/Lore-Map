@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 
 export type PassportSharePayload = {
@@ -17,10 +16,10 @@ export type PassportSharePayload = {
 };
 
 type PassportShareRow = {
+  id: string;
   payload: unknown;
+  created_at?: string;
 };
-
-const DEFAULT_PHOTO = '/images/passport/frog-lily-agent.png';
 
 const DEFAULT_PAYLOAD: PassportSharePayload = {
   title: 'Awaiting Pond Stamp',
@@ -31,11 +30,10 @@ const DEFAULT_PAYLOAD: PassportSharePayload = {
   mark: 'Unstamped Frog',
   streak: '0d',
   rites: '0',
-  power: '1x',
+  power: '0x',
   assets: '0/3',
   stamp: '△ · 🐸 · 🍃',
   mode: 'APPROVED',
-  photo: DEFAULT_PHOTO,
 };
 
 function cleanString(
@@ -47,31 +45,35 @@ function cleanString(
     return fallback;
   }
 
-  const clean = value.trim().replace(/\s+/g, ' ');
+  const cleaned = value.trim().replace(/\s+/g, ' ');
 
-  if (!clean) {
+  if (!cleaned) {
     return fallback;
   }
 
-  return clean.slice(0, maxLength);
+  return cleaned.slice(0, maxLength);
 }
 
 function cleanPhoto(value: unknown) {
   if (typeof value !== 'string') {
-    return DEFAULT_PHOTO;
+    return undefined;
   }
 
-  const clean = value.trim();
+  const cleaned = value.trim();
 
-  if (!clean.startsWith('/images/passport/')) {
-    return DEFAULT_PHOTO;
+  if (!cleaned.startsWith('/images/passport/')) {
+    return undefined;
   }
 
-  if (!/\.(png|jpg|jpeg|webp)$/i.test(clean)) {
-    return DEFAULT_PHOTO;
+  if (!/\.(png|jpg|jpeg|webp)$/i.test(cleaned)) {
+    return undefined;
   }
 
-  return clean.slice(0, 220);
+  if (cleaned.includes('..')) {
+    return undefined;
+  }
+
+  return cleaned.slice(0, 180);
 }
 
 export function cleanPassportSharePayload(
@@ -143,58 +145,102 @@ export function cleanPassportSharePayload(
 }
 
 function makeShareId() {
-  return randomBytes(12)
-    .toString('hex')
-    .slice(0, 20);
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 20);
+}
+
+function cleanShareId(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function isValidShareId(value: string) {
+  return /^[a-z0-9]{8,32}$/.test(value);
 }
 
 export async function createPassportShare(
-  payload: PassportSharePayload,
+  rawPayload: PassportSharePayload,
 ) {
   const supabase = getSupabaseAdmin();
+  const payload = cleanPassportSharePayload(rawPayload);
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = makeShareId();
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('tobyworld_passport_shares')
       .insert({
         id,
         payload,
+      })
+      .select('id, payload, created_at')
+      .single<PassportShareRow>();
+
+    if (error) {
+      if (error.code === '23505') {
+        continue;
+      }
+
+      console.error('Passport share insert failed:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
       });
 
-    if (!error) {
-      return id;
+      throw new Error(
+        `Passport share insert failed: ${error.message}`,
+      );
     }
 
-    if (error.code !== '23505') {
-      console.error(
-        'Passport share database insert failed:',
-        {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        },
+    if (!data?.id || data.id !== id) {
+      throw new Error(
+        'Passport share was inserted but the saved ID could not be confirmed.',
       );
+    }
+
+    /*
+     * Verify that a separate query can immediately retrieve the row.
+     * The API must never return a URL for an unreadable share.
+     */
+    const { data: verifiedRow, error: verifyError } =
+      await supabase
+        .from('tobyworld_passport_shares')
+        .select('id')
+        .eq('id', id)
+        .maybeSingle<{ id: string }>();
+
+    if (verifyError) {
+      console.error('Passport share verification failed:', {
+        id,
+        code: verifyError.code,
+        message: verifyError.message,
+        details: verifyError.details,
+        hint: verifyError.hint,
+      });
 
       throw new Error(
-        `Passport share database insert failed: ${error.message}`,
+        `Passport share verification failed: ${verifyError.message}`,
       );
     }
+
+    if (!verifiedRow?.id) {
+      throw new Error(
+        'Passport share could not be read after it was created.',
+      );
+    }
+
+    return id;
   }
 
   throw new Error(
-    'Unable to create a unique passport share.',
+    'Unable to create a unique passport share ID.',
   );
 }
 
-export async function getPassportShare(
-  id: string,
-): Promise<PassportSharePayload | null> {
-  const safeId = id.trim().toLowerCase();
+export async function getPassportShare(id: string) {
+  const safeId = cleanShareId(id);
 
-  if (!/^[a-f0-9]{8,32}$/.test(safeId)) {
+  if (!isValidShareId(safeId)) {
+    console.warn('Rejected invalid passport share ID:', safeId);
     return null;
   }
 
@@ -202,28 +248,29 @@ export async function getPassportShare(
 
   const { data, error } = await supabase
     .from('tobyworld_passport_shares')
-    .select('payload')
+    .select('id, payload, created_at')
     .eq('id', safeId)
     .maybeSingle<PassportShareRow>();
 
   if (error) {
-    console.error(
-      'Passport share database read failed:',
-      {
-        id: safeId,
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-      },
-    );
+    console.error('Passport share read failed:', {
+      id: safeId,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
 
     throw new Error(
-      `Passport share database read failed: ${error.message}`,
+      `Passport share read failed: ${error.message}`,
     );
   }
 
   if (!data?.payload) {
+    console.warn('Passport share row not found:', {
+      id: safeId,
+    });
+
     return null;
   }
 
