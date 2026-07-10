@@ -1,67 +1,70 @@
+.toby-swap-gateway,
+.toby-swap-gateway * {
+  box-sizing: border-box;
+}
+
 .toby-swap-gateway {
   position: relative;
-  overflow: hidden;
-  width: min(100%, 1040px);
+  width: min(100%, 860px);
   margin-inline: auto;
-  border: 1px solid rgba(141, 233, 255, 0.2);
-  border-radius: 36px;
-  padding: clamp(18px, 4vw, 32px);
+  overflow: hidden;
+  border: 1px solid rgba(141, 233, 255, 0.18);
+  border-radius: 30px;
+  padding: clamp(16px, 4vw, 28px);
   color: #f5f0df;
   background:
-    radial-gradient(circle at 12% 0%, rgba(255, 88, 75, 0.12), transparent 32%),
-    radial-gradient(circle at 90% 12%, rgba(103, 213, 246, 0.18), transparent 34%),
-    radial-gradient(circle at 50% 110%, rgba(68, 190, 132, 0.14), transparent 44%),
-    linear-gradient(180deg, rgba(6, 24, 31, 0.98), rgba(3, 13, 18, 0.99));
+    radial-gradient(
+      circle at 10% 0%,
+      rgba(255, 88, 75, 0.1),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 92% 5%,
+      rgba(103, 213, 246, 0.16),
+      transparent 32%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(6, 24, 31, 0.98),
+      rgba(3, 13, 18, 0.99)
+    );
   box-shadow:
-    inset 0 0 90px rgba(141, 233, 255, 0.05),
-    0 36px 90px rgba(0, 0, 0, 0.32);
+    inset 0 0 70px rgba(141, 233, 255, 0.045),
+    0 28px 70px rgba(0, 0, 0, 0.28);
 }
 
 .toby-swap-gateway::before {
-  content: '';
   position: absolute;
   inset: 0;
+  content: '';
   pointer-events: none;
-  opacity: 0.22;
+  opacity: 0.2;
   background-image:
-    radial-gradient(circle, rgba(255, 242, 196, 0.66) 0 1px, transparent 2px),
-    linear-gradient(rgba(146, 223, 241, 0.04) 1px, transparent 1px);
-  background-size: 54px 60px, 100% 42px;
+    radial-gradient(
+      circle,
+      rgba(255, 242, 196, 0.64) 0 1px,
+      transparent 2px
+    ),
+    linear-gradient(
+      rgba(146, 223, 241, 0.035) 1px,
+      transparent 1px
+    );
+  background-size:
+    54px 60px,
+    100% 42px;
   animation: toby-swap-stars 38s linear infinite;
 }
 
-.toby-swap-glow,
-.toby-swap-orbit {
-  position: absolute;
-  pointer-events: none;
-  border-radius: 999px;
-}
-
 .toby-swap-glow {
-  width: 360px;
-  height: 360px;
-  right: -150px;
-  top: -160px;
-  background: rgba(141, 233, 255, 0.16);
-  filter: blur(18px);
-}
-
-.toby-swap-orbit-one {
-  width: 280px;
-  height: 280px;
-  left: -140px;
-  bottom: -120px;
-  border: 1px solid rgba(249, 201, 104, 0.13);
-  animation: toby-swap-pulse 7s ease-in-out infinite;
-}
-
-.toby-swap-orbit-two {
-  width: 160px;
-  height: 160px;
-  right: 40px;
-  bottom: 58px;
-  border: 1px solid rgba(103, 213, 246, 0.16);
-  animation: toby-swap-pulse 6s ease-in-out infinite reverse;
+  position: absolute;
+  top: -140px;
+  right: -130px;
+  width: 300px;
+  height: 300px;
+  border-radius: 999px;
+  background: rgba(141, 233, 255, 0.14);
+  filter: blur(20px);
+  pointer-events: none;
 }
 
 .toby-swap-header,
@@ -75,151 +78,199 @@
 .toby-swap-header {
   display: grid;
   gap: 16px;
-  align-items: start;
+  align-items: center;
 }
 
 .toby-swap-header p,
 .toby-swap-card-copy p,
-.toby-swap-feature small,
-.toby-swap-address-box small {
+.toby-swap-guide-card p,
+.toby-swap-feature small {
   margin: 0;
   color: #ffe3a0;
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 950;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.17em;
   text-transform: uppercase;
 }
 
 .toby-swap-header h2 {
+  max-width: 610px;
   margin: 8px 0;
-  max-width: 720px;
   color: #fff8e6;
   font-family: Georgia, serif;
-  font-size: clamp(38px, 10vw, 72px);
+  font-size: clamp(38px, 9vw, 64px);
   line-height: 0.9;
-  letter-spacing: -0.075em;
+  letter-spacing: -0.07em;
 }
 
-.toby-swap-header span {
+.toby-swap-header > div:first-child > span {
   display: block;
-  max-width: 720px;
-  color: #d8d3bc;
-  font-size: 15px;
-  line-height: 1.55;
+  max-width: 620px;
+  color: #c8dfe3;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .toby-swap-feature {
   display: grid;
-  grid-template-columns: 64px 1fr;
-  gap: 12px;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
   align-items: center;
-  border: 1px solid rgba(146, 223, 241, 0.16);
-  border-radius: 24px;
-  padding: 12px;
+  border: 1px solid rgba(146, 223, 241, 0.14);
+  border-radius: 19px;
+  padding: 10px;
   background:
-    radial-gradient(circle at 0% 0%, rgba(103, 213, 246, 0.14), transparent 56%),
-    rgba(4, 21, 28, 0.62);
-  box-shadow: inset 0 0 28px rgba(103, 213, 246, 0.04);
+    radial-gradient(
+      circle at 0% 0%,
+      rgba(103, 213, 246, 0.13),
+      transparent 58%
+    ),
+    rgba(4, 21, 28, 0.64);
 }
 
 .toby-swap-feature img {
-  width: 64px;
-  height: 64px;
-  border: 1px solid rgba(141, 233, 255, 0.18);
-  border-radius: 21px;
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(141, 233, 255, 0.2);
+  border-radius: 16px;
   object-fit: cover;
-  background: rgba(4, 17, 23, 0.75);
+  background: #041117;
 }
 
 .toby-swap-feature strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 3px;
   color: #fff8e6;
-  font-size: 18px;
-  font-weight: 950;
+  font-size: 15px;
 }
 
 .toby-swap-feature span {
-  margin-top: 4px;
-  color: #a8c5cc;
-  font-size: 12px;
+  display: block;
+  margin-top: 3px;
+  color: #9dbcc4;
+  font-size: 10px;
+  line-height: 1.3;
 }
 
 .toby-swap-path {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 18px 0;
-  color: #fff8e6;
+  margin: 16px 0;
 }
 
 .toby-swap-path span {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
   place-items: center;
   border: 1px solid rgba(249, 201, 104, 0.18);
   border-radius: 999px;
   background: rgba(35, 28, 18, 0.48);
-  box-shadow: 0 0 24px rgba(249, 201, 104, 0.1);
+  font-size: 15px;
+  box-shadow: 0 0 18px rgba(249, 201, 104, 0.08);
 }
 
 .toby-swap-path i {
-  display: block;
-  flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, rgba(255, 91, 81, 0.1), rgba(249, 201, 104, 0.5), rgba(141, 233, 255, 0.1));
+  flex: 1;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 91, 81, 0.12),
+    rgba(249, 201, 104, 0.5),
+    rgba(141, 233, 255, 0.12)
+  );
 }
+
+/* Two columns on phone and desktop. */
 
 .toby-swap-grid {
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(10px, 2.5vw, 16px);
 }
 
 .toby-swap-card {
   position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 292px;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(146, 223, 241, 0.14);
-  border-radius: 28px;
+  border-radius: 22px;
+  padding: 12px;
   background:
-    radial-gradient(circle at 0% 0%, rgba(103, 213, 246, 0.09), transparent 42%),
-    rgba(4, 21, 28, 0.58);
+    radial-gradient(
+      circle at 0% 0%,
+      rgba(103, 213, 246, 0.08),
+      transparent 44%
+    ),
+    linear-gradient(
+      160deg,
+      rgba(9, 39, 48, 0.8),
+      rgba(3, 17, 23, 0.94)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 28px rgba(0, 0, 0, 0.18);
 }
 
 .toby-swap-card::after {
-  content: '';
   position: absolute;
   inset: 0;
+  content: '';
   pointer-events: none;
-  opacity: 0.85;
 }
 
 .toby-swap-card.accent-blue::after {
-  background: radial-gradient(circle at 50% 0%, rgba(141, 233, 255, 0.12), transparent 48%);
+  background: radial-gradient(
+    circle at 20% 0%,
+    rgba(141, 233, 255, 0.12),
+    transparent 48%
+  );
 }
 
 .toby-swap-card.accent-green::after {
-  background: radial-gradient(circle at 50% 0%, rgba(115, 226, 139, 0.13), transparent 48%);
+  background: radial-gradient(
+    circle at 20% 0%,
+    rgba(115, 226, 139, 0.12),
+    transparent 48%
+  );
 }
 
 .toby-swap-card.accent-red::after {
-  background: radial-gradient(circle at 50% 0%, rgba(255, 91, 81, 0.13), transparent 48%);
+  background: radial-gradient(
+    circle at 20% 0%,
+    rgba(255, 91, 81, 0.12),
+    transparent 48%
+  );
 }
 
-.toby-swap-card-image,
-.toby-swap-card-copy,
-.toby-swap-address-box,
-.toby-swap-actions,
-.toby-swap-hidden-link {
+.toby-swap-card > * {
   position: relative;
   z-index: 1;
 }
 
+.toby-swap-card-top {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
 .toby-swap-card-image {
   position: relative;
-  aspect-ratio: 1 / 1;
+  width: 66px;
+  height: 66px;
   overflow: hidden;
+  border: 1px solid rgba(141, 233, 255, 0.2);
+  border-radius: 19px;
   background: rgba(4, 17, 23, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 22px rgba(0, 0, 0, 0.2);
 }
 
 .toby-swap-card-image img {
@@ -230,41 +281,45 @@
 
 .toby-swap-card-image span {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 4px;
+  bottom: 4px;
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 23px;
+  height: 23px;
   place-items: center;
-  border: 1px solid rgba(255, 248, 230, 0.34);
+  border: 1px solid rgba(255, 248, 230, 0.32);
   border-radius: 999px;
-  color: #fff8e6;
   background: rgba(4, 17, 23, 0.92);
-  font-size: 19px;
-  box-shadow: 0 0 24px rgba(249, 201, 104, 0.14);
+  font-size: 12px;
 }
 
 .toby-swap-card-copy {
-  padding: 14px;
+  min-width: 0;
 }
 
 .toby-swap-card-copy h3 {
-  margin: 5px 0 2px;
+  margin: 4px 0 2px;
+  overflow: hidden;
   color: #fff8e6;
   font-family: Georgia, serif;
-  font-size: 34px;
+  font-size: clamp(21px, 5vw, 28px);
   line-height: 0.95;
-  letter-spacing: -0.06em;
+  letter-spacing: -0.055em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toby-swap-card-copy strong {
   display: block;
-  margin-bottom: 8px;
+  overflow: hidden;
   color: #8de9ff;
-  font-size: 12px;
+  font-size: 9px;
   font-weight: 950;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .toby-swap-card.accent-green .toby-swap-card-copy strong {
@@ -275,70 +330,81 @@
   color: #ff9188;
 }
 
-.toby-swap-card-copy span {
-  display: block;
-  color: #c8e1e6;
-  font-size: 13px;
+.toby-swap-description {
+  display: -webkit-box;
+  min-height: 49px;
+  margin: 12px 0 10px;
+  overflow: hidden;
+  color: #bfd7dc;
+  font-size: 11px;
   line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
-.toby-swap-address-box {
-  padding: 0 14px 14px;
-}
-
-.toby-swap-address-box button {
+.toby-swap-address {
   display: flex;
   width: 100%;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 7px;
-  border: 1px solid rgba(146, 223, 241, 0.14);
-  border-radius: 15px;
-  padding: 10px 11px;
-  color: #d8d3bc;
-  background: rgba(4, 21, 28, 0.52);
-  font-size: 12px;
+  gap: 6px;
+  margin-top: auto;
+  overflow: hidden;
+  border: 1px solid rgba(146, 223, 241, 0.13);
+  border-radius: 12px;
+  padding: 8px;
+  color: #c6dadd;
+  background: rgba(4, 21, 28, 0.58);
+  font-size: 9px;
   font-weight: 900;
   cursor: pointer;
 }
 
-.toby-swap-address-box b {
+.toby-swap-address span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toby-swap-address b {
+  flex: 0 0 auto;
   color: #ffe3a0;
-  font-size: 11px;
+  font-size: 8px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .toby-swap-actions {
   display: grid;
-  gap: 8px;
-  padding: 0 14px 14px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .toby-swap-button {
   display: grid;
+  min-width: 0;
+  min-height: 38px;
   place-items: center;
-  border: 1px solid rgba(249, 201, 104, 0.2);
-  border-radius: 16px;
-  padding: 12px 13px;
+  border: 1px solid rgba(249, 201, 104, 0.18);
+  border-radius: 12px;
+  padding: 8px 5px;
   color: #d8d3bc;
   background: rgba(35, 28, 18, 0.54);
-  font-size: 12px;
+  font-size: 9px;
   font-weight: 950;
+  line-height: 1.15;
   text-align: center;
   text-decoration: none;
-  cursor: pointer;
   transition:
-    transform 160ms ease,
-    border-color 160ms ease,
-    background 160ms ease,
-    box-shadow 160ms ease;
+    transform 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .toby-swap-button:hover {
   transform: translateY(-1px);
-  border-color: rgba(249, 201, 104, 0.3);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 9px 20px rgba(0, 0, 0, 0.22);
 }
 
 .toby-swap-button.primary {
@@ -348,28 +414,102 @@
 
 .toby-swap-button.is-loading {
   pointer-events: none;
-  opacity: 0.72;
+  opacity: 0.7;
 }
-.toby-swap-hidden-link {
+
+/* Fourth guide tile */
+
+.toby-swap-guide-card {
+  justify-content: flex-start;
+  border-color: rgba(249, 201, 104, 0.18);
+  background:
+    radial-gradient(
+      circle at 20% 0%,
+      rgba(249, 201, 104, 0.12),
+      transparent 45%
+    ),
+    linear-gradient(
+      160deg,
+      rgba(43, 35, 20, 0.72),
+      rgba(4, 18, 24, 0.94)
+    );
+}
+
+.toby-swap-guide-icon {
+  display: grid;
+  width: 66px;
+  height: 66px;
+  place-items: center;
+  border: 1px solid rgba(249, 201, 104, 0.25);
+  border-radius: 19px;
+  color: #ffe3a0;
+  background:
+    radial-gradient(
+      circle at 35% 20%,
+      rgba(255, 255, 255, 0.22),
+      transparent 24%
+    ),
+    rgba(62, 47, 23, 0.72);
+  font-size: 28px;
+  box-shadow: 0 0 22px rgba(249, 201, 104, 0.09);
+}
+
+.toby-swap-guide-card h3 {
+  margin: 10px 0 0;
+  color: #fff8e6;
+  font-family: Georgia, serif;
+  font-size: clamp(24px, 5vw, 30px);
+  line-height: 0.95;
+}
+
+.toby-swap-guide-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.toby-swap-guide-list span {
+  display: grid;
+  grid-template-columns: 23px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  color: #c8dfe3;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.toby-swap-guide-list b {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 1px solid rgba(249, 201, 104, 0.2);
+  border-radius: 8px;
+  color: #ffe3a0;
+  background: rgba(35, 28, 18, 0.52);
+  font-size: 9px;
+}
+
+.toby-swap-guide-card > small {
   display: block;
-  padding: 0 14px 14px;
-  color: #8de9ff;
-  font-size: 12px;
-  font-weight: 900;
-  text-decoration: none;
+  margin-top: auto;
+  padding-top: 12px;
+  color: #829fa6;
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .toby-swap-footer {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   margin-top: 14px;
-  border: 1px solid rgba(249, 201, 104, 0.14);
-  border-radius: 17px;
-  padding: 12px 13px;
-  color: #fff1c4;
-  background: rgba(35, 28, 18, 0.5);
-  font-size: 13px;
-  line-height: 1.45;
+  border: 1px solid rgba(249, 201, 104, 0.13);
+  border-radius: 15px;
+  padding: 10px 11px;
+  color: #d8d3bc;
+  background: rgba(35, 28, 18, 0.48);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .toby-swap-footer p {
@@ -383,15 +523,88 @@
 
 @media (min-width: 720px) {
   .toby-swap-header {
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: minmax(0, 1fr) 250px;
   }
 
-  .toby-swap-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .toby-swap-card {
+    min-height: 306px;
+    padding: 14px;
+  }
+
+  .toby-swap-card-top {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .toby-swap-card-image,
+  .toby-swap-guide-icon {
+    width: 76px;
+    height: 76px;
   }
 
   .toby-swap-card-copy h3 {
     font-size: 30px;
+  }
+}
+
+@media (max-width: 390px) {
+  .toby-swap-gateway {
+    padding: 12px;
+    border-radius: 24px;
+  }
+
+  .toby-swap-grid {
+    gap: 8px;
+  }
+
+  .toby-swap-card {
+    min-height: 270px;
+    border-radius: 18px;
+    padding: 9px;
+  }
+
+  .toby-swap-card-top {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .toby-swap-card-image,
+  .toby-swap-guide-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 15px;
+  }
+
+  .toby-swap-card-copy h3 {
+    font-size: 19px;
+  }
+
+  .toby-swap-card-copy strong {
+    font-size: 7px;
+  }
+
+  .toby-swap-description {
+    min-height: 44px;
+    font-size: 9px;
+  }
+
+  .toby-swap-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .toby-swap-button {
+    min-height: 33px;
+    font-size: 8px;
+  }
+
+  .toby-swap-guide-list span {
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 6px;
+    font-size: 8px;
+  }
+
+  .toby-swap-guide-list b {
+    width: 20px;
+    height: 20px;
   }
 }
 
@@ -405,15 +618,8 @@
   }
 }
 
-@keyframes toby-swap-pulse {
-  0%,
-  100% {
-    transform: scale(0.96);
-    opacity: 0.28;
-  }
-
-  50% {
-    transform: scale(1.06);
-    opacity: 0.55;
+@media (prefers-reduced-motion: reduce) {
+  .toby-swap-gateway::before {
+    animation: none;
   }
 }
