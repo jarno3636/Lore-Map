@@ -40,6 +40,7 @@ export async function GET(
   const imageUrl = `${origin}/api/tobyworld/passport-image/${shareId}`;
   const appUrl = `${origin}/#pond-passport`;
   const splashImageUrl = `${origin}/miniapp/tobyworld-app-icon.png`;
+  const description = `${payload.title} · ${payload.mark} · The pond remains professionally concerned.`;
 
   const miniAppEmbed = {
     version: '1',
@@ -47,7 +48,7 @@ export async function GET(
     button: {
       title: 'Open Passport',
       action: {
-        type: 'launch_frame',
+        type: 'launch_miniapp',
         name: 'Tobyworld Atlas',
         url: appUrl,
         splashImageUrl,
@@ -57,7 +58,6 @@ export async function GET(
   };
 
   const miniAppEmbedJson = JSON.stringify(miniAppEmbed);
-  const description = `${payload.title} · ${payload.mark} · The pond remains professionally concerned.`;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -75,8 +75,9 @@ export async function GET(
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:image" content="${escapeHtml(imageUrl)}" />
     <meta property="og:image:secure_url" content="${escapeHtml(imageUrl)}" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image:height" content="800" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(payload.name)} · Tobyworld Pond Passport" />
@@ -84,7 +85,6 @@ export async function GET(
     <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
 
     <meta name="fc:miniapp" content="${escapeHtml(miniAppEmbedJson)}" />
-    <meta name="fc:frame" content="${escapeHtml(miniAppEmbedJson)}" />
   </head>
 
   <body style="margin:0;background:#061419;color:#fff8e6;font-family:Arial,sans-serif;min-height:100vh;display:grid;place-items:center;">
@@ -94,7 +94,7 @@ export async function GET(
           src="${escapeHtml(imageUrl)}"
           alt="Tobyworld Pond Passport"
           width="1200"
-          height="630"
+          height="800"
           style="display:block;width:100%;height:auto;border-radius:24px;border:1px solid rgba(249,201,104,0.24);box-shadow:0 26px 70px rgba(0,0,0,0.35);"
         />
       </a>
@@ -128,7 +128,7 @@ export async function GET(
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'public, max-age=60, s-maxage=300',
     },
   });
 }
