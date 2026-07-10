@@ -1,67 +1,512 @@
 import { ImageResponse } from 'next/og';
-import { getPassportShare } from '@/lib/tobyworld-passport-share';
+import {
+  getPassportShare,
+  type PassportSharePayload,
+} from '@/lib/tobyworld-passport-share';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function getPhotoUrl(origin: string, photo?: string) {
-  if (!photo) return '';
+const WIDTH = 1200;
+const HEIGHT = 800;
 
-  if (!photo.startsWith('/images/passport/')) return '';
+function getPublicOrigin(request: Request) {
+  const configuredOrigin = (
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    ''
+  )
+    .trim()
+    .replace(/\/+$/, '');
 
-  return `${origin}${photo}`;
+  if (configuredOrigin) {
+    return configuredOrigin;
+  }
+
+  const forwardedHost = request.headers
+    .get('x-forwarded-host')
+    ?.split(',')[0]
+    ?.trim();
+
+  const forwardedProtocol = request.headers
+    .get('x-forwarded-proto')
+    ?.split(',')[0]
+    ?.trim();
+
+  if (forwardedHost) {
+    return `${forwardedProtocol || 'https'}://${forwardedHost}`;
+  }
+
+  return new URL(request.url).origin;
 }
 
-function fallbackImage(message = 'Passport image unavailable') {
+function getPhotoUrl(
+  origin: string,
+  photo?: string,
+) {
+  const safePhoto =
+    photo?.startsWith('/images/passport/')
+      ? photo
+      : '/images/passport/frog-lily-agent.png';
+
+  return new URL(
+    safePhoto,
+    origin,
+  ).toString();
+}
+
+function getTitleSize(title: string) {
+  if (title.length > 46) return 46;
+  if (title.length > 34) return 54;
+  if (title.length > 24) return 62;
+
+  return 70;
+}
+
+function getNameSize(name: string) {
+  if (name.length > 30) return 42;
+  if (name.length > 22) return 50;
+
+  return 58;
+}
+
+function imageHeaders(
+  shareId: string,
+  cache = true,
+) {
+  return {
+    'Cache-Control': cache
+      ? 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800'
+      : 'no-store',
+    'Content-Disposition':
+      `inline; filename="tobyworld-passport-${shareId}.png"`,
+    'X-Content-Type-Options':
+      'nosniff',
+  };
+}
+
+function fallbackImage(
+  shareId: string,
+  message: string,
+) {
   return new ImageResponse(
     (
       <div
         style={{
-          width: '1200px',
-          height: '800px',
+          width: WIDTH,
+          height: HEIGHT,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexDirection: 'column',
-          background:
-            'radial-gradient(circle at 15% 5%, rgba(141,233,255,0.28), transparent 34%), linear-gradient(135deg, #061419, #352413)',
+          padding: 70,
           color: '#fff8e6',
-          fontFamily: 'Arial',
-          padding: '60px',
+          background:
+            'linear-gradient(135deg, #061419 0%, #12303a 50%, #352413 100%)',
+          fontFamily: 'sans-serif',
         }}
       >
         <div
           style={{
-            fontSize: '28px',
-            fontWeight: 900,
+            display: 'flex',
             color: '#8de9ff',
-            letterSpacing: '5px',
-            textTransform: 'uppercase',
+            fontSize: 25,
+            fontWeight: 900,
+            letterSpacing: 5,
           }}
         >
-          Tobyworld Pond Passport
+          TOBYWORLD POND PASSPORT
         </div>
+
         <div
           style={{
-            marginTop: '28px',
-            fontSize: '62px',
-            lineHeight: 1,
-            fontFamily: 'Georgia',
+            display: 'flex',
+            maxWidth: 900,
+            marginTop: 28,
+            color: '#fff8e6',
+            fontSize: 58,
             fontWeight: 900,
+            lineHeight: 1,
             textAlign: 'center',
           }}
         >
           {message}
         </div>
+
+        <div
+          style={{
+            display: 'flex',
+            marginTop: 30,
+            color: '#ffe3a0',
+            fontSize: 28,
+          }}
+        >
+          △ · POND · 🍃
+        </div>
       </div>
     ),
     {
-      width: 1200,
-      height: 800,
-      headers: {
-        'Cache-Control': 'no-store',
-      },
+      width: WIDTH,
+      height: HEIGHT,
+      headers: imageHeaders(
+        shareId,
+        false,
+      ),
     },
+  );
+}
+
+function PassportImage({
+  payload,
+  photoUrl,
+}: {
+  payload: PassportSharePayload;
+  photoUrl: string;
+}) {
+  const stats = [
+    {
+      label: 'STREAK',
+      value: payload.streak,
+    },
+    {
+      label: 'RITES',
+      value: payload.rites,
+    },
+    {
+      label: 'POWER',
+      value: payload.power,
+    },
+    {
+      label: 'ASSETS',
+      value: payload.assets,
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        width: WIDTH,
+        height: HEIGHT,
+        display: 'flex',
+        padding: 54,
+        color: '#2f1f15',
+        background:
+          'linear-gradient(135deg, #061419 0%, #12303a 48%, #352413 100%)',
+        fontFamily: 'sans-serif',
+      }}
+    >
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          overflow: 'hidden',
+          border: '4px solid #ffe3a0',
+          borderRadius: 44,
+          background:
+            'linear-gradient(135deg, #fff8e6 0%, #f2dfb1 55%, #e5c987 100%)',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            right: -18,
+            bottom: 86,
+            display: 'flex',
+            color: 'rgba(91,53,26,0.06)',
+            fontSize: 170,
+            fontWeight: 900,
+            letterSpacing: -12,
+            transform: 'rotate(-12deg)',
+          }}
+        >
+          POND
+        </div>
+
+        <div
+          style={{
+            width: 780,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '54px 48px 46px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              color: '#7b3f23',
+              fontSize: 22,
+              fontWeight: 900,
+              letterSpacing: 4,
+            }}
+          >
+            TOBYWORLD POND PASSPORT
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 18,
+              color: '#2f1f15',
+              fontSize: getNameSize(payload.name),
+              fontWeight: 900,
+              lineHeight: 0.95,
+            }}
+          >
+            {payload.name}
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 9,
+              color: '#7b3f23',
+              fontSize: 23,
+              fontWeight: 800,
+            }}
+          >
+            {payload.handle}
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 34,
+              color: '#7b3f23',
+              fontSize: 18,
+              fontWeight: 900,
+              letterSpacing: 3,
+            }}
+          >
+            POND TITLE
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              maxWidth: 680,
+              marginTop: 10,
+              color: '#2f1f15',
+              fontSize: getTitleSize(
+                payload.title,
+              ),
+              fontWeight: 900,
+              lineHeight: 0.92,
+            }}
+          >
+            {payload.title}
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              maxWidth: 680,
+              marginTop: 20,
+              color: '#3c281b',
+              fontSize: 25,
+              fontWeight: 700,
+              lineHeight: 1.22,
+            }}
+          >
+            {payload.characteristic}
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 'auto',
+            }}
+          >
+            {stats.map((stat, index) => (
+              <div
+                key={stat.label}
+                style={{
+                  width: 154,
+                  height: 82,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  marginRight:
+                    index === stats.length - 1
+                      ? 0
+                      : 12,
+                  border:
+                    '1px solid rgba(91,53,26,0.20)',
+                  borderRadius: 17,
+                  padding: '0 15px',
+                  background:
+                    'rgba(255,248,230,0.42)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    color: '#2f1f15',
+                    fontSize: 28,
+                    fontWeight: 900,
+                  }}
+                >
+                  {stat.value}
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    marginTop: 4,
+                    color: '#7b3f23',
+                    fontSize: 13,
+                    fontWeight: 900,
+                    letterSpacing: 1.3,
+                  }}
+                >
+                  {stat.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          style={{
+            width: 310,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            padding: '54px 34px 44px',
+            borderLeft:
+              '2px solid rgba(91,53,26,0.17)',
+          }}
+        >
+          <div
+            style={{
+              width: 180,
+              height: 180,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              border:
+                '4px solid rgba(91,53,26,0.30)',
+              borderRadius: 38,
+              background:
+                'rgba(255,248,230,0.46)',
+            }}
+          >
+            <img
+              src={photoUrl}
+              alt=""
+              width={180}
+              height={180}
+              style={{
+                width: 180,
+                height: 180,
+                objectFit: 'cover',
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              width: 230,
+              minHeight: 105,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 34,
+              border:
+                '5px double rgba(123,63,35,0.48)',
+              borderRadius: 80,
+              padding: '15px 14px',
+              background:
+                'rgba(255,248,230,0.38)',
+              transform: 'rotate(2deg)',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                color: '#2f1f15',
+                fontSize: 22,
+                fontWeight: 900,
+              }}
+            >
+              {payload.stamp}
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                marginTop: 6,
+                color: '#7b3f23',
+                fontSize: 14,
+                fontWeight: 900,
+                letterSpacing: 2,
+              }}
+            >
+              {payload.mode}
+            </div>
+          </div>
+
+          <div
+            style={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              marginTop: 34,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                color: '#7b3f23',
+                fontSize: 16,
+                fontWeight: 900,
+                letterSpacing: 2,
+              }}
+            >
+              MARK
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                marginTop: 8,
+                color: '#2f1f15',
+                fontSize:
+                  payload.mark.length > 24
+                    ? 23
+                    : 28,
+                fontWeight: 900,
+                lineHeight: 1.05,
+              }}
+            >
+              {payload.mark}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 'auto',
+              color: '#7b3f23',
+              fontSize: 17,
+              fontWeight: 900,
+              lineHeight: 1.3,
+              textAlign: 'center',
+            }}
+          >
+            We move not by leaps.
+            <br />
+            We move by stillness.
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -73,327 +518,55 @@ export async function GET(
     }>;
   },
 ) {
+  const { shareId } =
+    await context.params;
+
   try {
-    const { shareId } = await context.params;
-    const payload = await getPassportShare(shareId);
-    const requestUrl = new URL(request.url);
+    const payload =
+      await getPassportShare(shareId);
 
     if (!payload) {
-      return fallbackImage('Passport not found');
+      return fallbackImage(
+        shareId,
+        'Passport not found',
+      );
     }
 
-    const photo = getPhotoUrl(requestUrl.origin, payload.photo);
+    const origin =
+      getPublicOrigin(request);
+
+    const photoUrl =
+      getPhotoUrl(
+        origin,
+        payload.photo,
+      );
 
     return new ImageResponse(
-      (
-        <div
-          style={{
-            width: '1200px',
-            height: '800px',
-            display: 'flex',
-            padding: '58px',
-            background:
-              'radial-gradient(circle at 15% 5%, rgba(141,233,255,0.35), transparent 34%), radial-gradient(circle at 85% 8%, rgba(248,215,125,0.28), transparent 34%), linear-gradient(135deg, #061419, #152217 46%, #352413)',
-            color: '#2f1f15',
-            fontFamily: 'Arial',
-          }}
-        >
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              borderRadius: '48px',
-              border: '4px solid rgba(255,227,160,0.72)',
-              background: 'linear-gradient(135deg, #fff8e6, #e8cf99)',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                right: '-18px',
-                bottom: '118px',
-                fontSize: '172px',
-                fontFamily: 'Georgia',
-                fontWeight: 900,
-                color: 'rgba(91,53,26,0.065)',
-                transform: 'rotate(-13deg)',
-              }}
-            >
-              POND
-            </div>
-
-            <div
-              style={{
-                width: '72%',
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                padding: '64px 58px 54px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '24px',
-                  fontWeight: 900,
-                  letterSpacing: '5px',
-                  color: '#7b3f23',
-                }}
-              >
-                TOBYWORLD POND PASSPORT
-              </div>
-
-              <div
-                style={{
-                  marginTop: '22px',
-                  fontSize: payload.name.length > 24 ? '50px' : '62px',
-                  lineHeight: 0.92,
-                  fontFamily: 'Georgia',
-                  fontWeight: 900,
-                  color: '#2f1f15',
-                }}
-              >
-                {payload.name}
-              </div>
-
-              <div
-                style={{
-                  marginTop: '12px',
-                  fontSize: '25px',
-                  fontWeight: 800,
-                  color: '#7b3f23',
-                }}
-              >
-                {payload.handle}
-              </div>
-
-              <div
-                style={{
-                  marginTop: '44px',
-                  fontSize: '20px',
-                  fontWeight: 900,
-                  letterSpacing: '3px',
-                  color: '#7b3f23',
-                }}
-              >
-                POND TITLE
-              </div>
-
-              <div
-                style={{
-                  marginTop: '14px',
-                  maxWidth: '720px',
-                  fontSize: payload.title.length > 32 ? '54px' : '70px',
-                  lineHeight: 0.9,
-                  fontFamily: 'Georgia',
-                  fontWeight: 900,
-                  color: '#2f1f15',
-                }}
-              >
-                {payload.title}
-              </div>
-
-              <div
-                style={{
-                  marginTop: '24px',
-                  maxWidth: '725px',
-                  fontSize: '27px',
-                  lineHeight: 1.22,
-                  fontWeight: 800,
-                  color: '#3c281b',
-                }}
-              >
-                {payload.characteristic}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 'auto',
-                  display: 'flex',
-                  gap: '14px',
-                }}
-              >
-                {[
-                  ['STREAK', payload.streak],
-                  ['RITES', payload.rites],
-                  ['POWER', payload.power],
-                  ['ASSETS', payload.assets],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    style={{
-                      width: '136px',
-                      height: '76px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center',
-                      borderRadius: '18px',
-                      border: '1px solid rgba(91,53,26,0.18)',
-                      background: 'rgba(255,248,230,0.42)',
-                      padding: '0 16px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '29px',
-                        fontWeight: 900,
-                        color: '#2f1f15',
-                      }}
-                    >
-                      {value}
-                    </div>
-                    <div
-                      style={{
-                        marginTop: '4px',
-                        fontSize: '14px',
-                        fontWeight: 900,
-                        color: '#7b3f23',
-                        letterSpacing: '1.4px',
-                      }}
-                    >
-                      {label}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div
-              style={{
-                width: '28%',
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                padding: '64px 42px 54px',
-                borderLeft: '2px solid rgba(91,53,26,0.16)',
-              }}
-            >
-              <div
-                style={{
-                  width: '184px',
-                  height: '184px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                  borderRadius: '38px',
-                  border: '4px solid rgba(91,53,26,0.3)',
-                  background: 'rgba(255,248,230,0.44)',
-                  fontSize: '88px',
-                }}
-              >
-                {photo ? (
-                  <img
-                    src={photo}
-                    alt=""
-                    width="184"
-                    height="184"
-                    style={{
-                      width: '184px',
-                      height: '184px',
-                      objectFit: 'cover',
-                    }}
-                  />
-                ) : (
-                  '🐸'
-                )}
-              </div>
-
-              <div
-                style={{
-                  marginTop: '42px',
-                  width: '226px',
-                  minHeight: '108px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '999px',
-                  border: '5px double rgba(123,63,35,0.48)',
-                  background: 'rgba(255,248,230,0.35)',
-                  transform: 'rotate(3deg)',
-                  textAlign: 'center',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '25px',
-                    fontWeight: 900,
-                    color: '#2f1f15',
-                  }}
-                >
-                  {payload.stamp}
-                </div>
-                <div
-                  style={{
-                    marginTop: '7px',
-                    fontSize: '16px',
-                    fontWeight: 900,
-                    letterSpacing: '2.2px',
-                    color: '#7b3f23',
-                  }}
-                >
-                  {payload.mode}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: '42px',
-                  width: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  fontSize: '19px',
-                  fontWeight: 900,
-                  color: '#7b3f23',
-                }}
-              >
-                <div>MARK</div>
-                <div
-                  style={{
-                    fontSize: '29px',
-                    lineHeight: 1.05,
-                    fontFamily: 'Georgia',
-                    fontWeight: 900,
-                    color: '#2f1f15',
-                  }}
-                >
-                  {payload.mark}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 'auto',
-                  fontSize: '18px',
-                  fontWeight: 900,
-                  color: '#7b3f23',
-                  textAlign: 'center',
-                  lineHeight: 1.22,
-                }}
-              >
-                We move not by leaps.
-                <br />
-                We move by stillness.
-              </div>
-            </div>
-          </div>
-        </div>
-      ),
+      <PassportImage
+        payload={payload}
+        photoUrl={photoUrl}
+      />,
       {
-        width: 1200,
-        height: 800,
-        headers: {
-          'Cache-Control': 'public, max-age=60, s-maxage=300',
-        },
+        width: WIDTH,
+        height: HEIGHT,
+        headers: imageHeaders(
+          shareId,
+          true,
+        ),
       },
     );
   } catch (error) {
-    console.error('Passport image failed:', error);
-    return fallbackImage('Passport image failed');
+    console.error(
+      'Passport image route failed:',
+      {
+        shareId,
+        error,
+      },
+    );
+
+    return fallbackImage(
+      shareId,
+      'Passport image unavailable',
+    );
   }
 }
