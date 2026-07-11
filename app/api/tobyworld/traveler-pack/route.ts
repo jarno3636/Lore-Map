@@ -44,6 +44,16 @@ type ProgressRow = {
   completed_at: string | null;
 };
 
+type InsertedEventRow = {
+  id: string;
+};
+
+type GrantedPatchRow = {
+  patch_id: string;
+  earned_at: string;
+  featured: boolean;
+};
+
 const EVENT_KEYS = new Set([
   'daily_rite_completed',
   'daily_rite_streak',
@@ -78,12 +88,27 @@ function safeDefinition(row: PatchDefinitionRow) {
 }
 
 function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
+  return NextResponse.json(
+    {
+      ok: false,
+      error: message,
+    },
+    { status },
+  );
 }
 
-function isWithinAvailability(row: PatchDefinitionRow, now = new Date()) {
-  if (row.starts_at && new Date(row.starts_at) > now) return false;
-  if (row.ends_at && new Date(row.ends_at) < now) return false;
+function isWithinAvailability(
+  row: PatchDefinitionRow,
+  now = new Date(),
+) {
+  if (row.starts_at && new Date(row.starts_at) > now) {
+    return false;
+  }
+
+  if (row.ends_at && new Date(row.ends_at) < now) {
+    return false;
+  }
+
   return true;
 }
 
@@ -93,7 +118,10 @@ function numberRequirement(
   fallback: number,
 ) {
   const value = requirement[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : fallback;
 }
 
 function stringArrayRequirement(
@@ -101,8 +129,11 @@ function stringArrayRequirement(
   key: string,
 ): string[] {
   const value = requirement[key];
+
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
+    ? value.filter(
+        (item): item is string => typeof item === 'string',
+      )
     : [];
 }
 
@@ -116,19 +147,41 @@ async function loadPack(fid: number) {
     supabaseAdmin
       .from('tobyworld_patch_definitions')
       .select(
-        'id,name,short_description,lore,category,rarity,image_path,public_hint,is_hidden,sort_order,animation_key,unlock_type,event_key,requirement,starts_at,ends_at',
+        [
+          'id',
+          'name',
+          'short_description',
+          'lore',
+          'category',
+          'rarity',
+          'image_path',
+          'public_hint',
+          'is_hidden',
+          'sort_order',
+          'animation_key',
+          'unlock_type',
+          'event_key',
+          'requirement',
+          'starts_at',
+          'ends_at',
+        ].join(','),
       )
       .eq('is_active', true)
       .order('sort_order', { ascending: true }),
+
     supabaseAdmin
       .from('tobyworld_owned_patches')
       .select('patch_id,earned_at,featured')
       .eq('fid', fid)
       .order('earned_at', { ascending: false }),
+
     supabaseAdmin
       .from('tobyworld_patch_progress')
-      .select('patch_id,current_value,target_value,completed_at')
+      .select(
+        'patch_id,current_value,target_value,completed_at',
+      )
       .eq('fid', fid),
+
     supabaseAdmin
       .from('tobyworld_backpack_placements')
       .select('patch_id,x,y,rotation,scale,z_index')
@@ -141,20 +194,38 @@ async function loadPack(fid: number) {
     progressResult.error ??
     layoutResult.error;
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
 
-  const definitions = (definitionsResult.data ?? []) as PatchDefinitionRow[];
-  const owned = (ownedResult.data ?? []) as OwnedPatchRow[];
-  const progress = (progressResult.data ?? []) as ProgressRow[];
+  const definitions =
+    (definitionsResult.data ?? []) as PatchDefinitionRow[];
+
+  const owned =
+    (ownedResult.data ?? []) as OwnedPatchRow[];
+
+  const progress =
+    (progressResult.data ?? []) as ProgressRow[];
 
   const definitionsById = new Map(
-    definitions.map((definition) => [definition.id, definition]),
+    definitions.map((definition) => [
+      definition.id,
+      definition,
+    ]),
   );
-  const ownedIds = new Set(owned.map((item) => item.patch_id));
+
+  const ownedIds = new Set(
+    owned.map((item) => item.patch_id),
+  );
 
   const ownedPatches = owned.flatMap((ownership) => {
-    const definition = definitionsById.get(ownership.patch_id);
-    if (!definition) return [];
+    const definition = definitionsById.get(
+      ownership.patch_id,
+    );
+
+    if (!definition) {
+      return [];
+    }
 
     return [
       {
@@ -167,7 +238,12 @@ async function loadPack(fid: number) {
 
   const visibleProgress = progress.flatMap((item) => {
     const definition = definitionsById.get(item.patch_id);
-    if (!definition || definition.is_hidden || ownedIds.has(definition.id)) {
+
+    if (
+      !definition ||
+      definition.is_hidden ||
+      ownedIds.has(definition.id)
+    ) {
       return [];
     }
 
@@ -182,7 +258,11 @@ async function loadPack(fid: number) {
   });
 
   const catalog = definitions
-    .filter((definition) => !definition.is_hidden || ownedIds.has(definition.id))
+    .filter(
+      (definition) =>
+        !definition.is_hidden ||
+        ownedIds.has(definition.id),
+    )
     .map(safeDefinition);
 
   const layout = (layoutResult.data ?? []).map((item) => ({
@@ -197,11 +277,15 @@ async function loadPack(fid: number) {
   const backpackLayout =
     layout.length > 0
       ? layout
-      : buildDefaultLayout(ownedPatches.map((patch) => patch.id));
+      : buildDefaultLayout(
+          ownedPatches.map((patch) => patch.id),
+        );
 
   const patchCount = ownedPatches.length;
+
   const secretCount = ownedPatches.filter(
-    (patch) => patch.category === 'secret_discoveries',
+    (patch) =>
+      patch.category === 'secret_discoveries',
   ).length;
 
   return {
@@ -211,7 +295,8 @@ async function loadPack(fid: number) {
       patchCount,
       secretCount,
       featuredPatchId:
-        ownedPatches.find((patch) => patch.featured)?.id ?? null,
+        ownedPatches.find((patch) => patch.featured)?.id ??
+        null,
     },
     catalog,
     ownedPatches,
@@ -221,81 +306,134 @@ async function loadPack(fid: number) {
   };
 }
 
+async function grantPatch(
+  fid: number,
+  patchId: string,
+  eventId: string,
+): Promise<GrantedPatchRow | null> {
+  const { data, error } = await supabaseAdmin
+    .from('tobyworld_owned_patches')
+    .upsert(
+      {
+        fid,
+        patch_id: patchId,
+        source: 'engine',
+        event_id: eventId,
+      },
+      {
+        onConflict: 'fid,patch_id',
+        ignoreDuplicates: true,
+      },
+    )
+    .select('patch_id,earned_at,featured')
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as GrantedPatchRow | null;
+}
+
 async function evaluateCounterPatch(
   fid: number,
   definition: PatchDefinitionRow,
   event: TravelerEventInput,
   eventId: string,
-) {
-  const target = numberRequirement(definition.requirement, 'target', 1);
+): Promise<GrantedPatchRow | null> {
+  const target = numberRequirement(
+    definition.requirement,
+    'target',
+    1,
+  );
 
-  const { data: existing } = await supabaseAdmin
-    .from('tobyworld_patch_progress')
-    .select('current_value,target_value')
-    .eq('fid', fid)
-    .eq('patch_id', definition.id)
-    .maybeSingle();
+  const { data: existing, error: existingError } =
+    await supabaseAdmin
+      .from('tobyworld_patch_progress')
+      .select('current_value,target_value')
+      .eq('fid', fid)
+      .eq('patch_id', definition.id)
+      .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
 
   let nextValue = existing?.current_value ?? 0;
 
   if (definition.unlock_type === 'unique_counter') {
     const uniqueField =
-      typeof definition.requirement.uniqueField === 'string'
+      typeof definition.requirement.uniqueField ===
+      'string'
         ? definition.requirement.uniqueField
         : null;
 
     const uniqueKey =
       event.uniqueKey ??
-      (uniqueField && typeof event.context?.[uniqueField] === 'string'
+      (uniqueField &&
+      typeof event.context?.[uniqueField] === 'string'
         ? String(event.context[uniqueField])
         : null);
 
-    if (!uniqueKey) return null;
+    if (!uniqueKey) {
+      return null;
+    }
 
-    const { count } = await supabaseAdmin
-      .from('tobyworld_patch_events')
-      .select('id', { head: true, count: 'exact' })
-      .eq('fid', fid)
-      .eq('event_key', event.eventKey)
-      .not('unique_key', 'is', null);
+    const { count, error: countError } =
+      await supabaseAdmin
+        .from('tobyworld_patch_events')
+        .select('id', {
+          head: true,
+          count: 'exact',
+        })
+        .eq('fid', fid)
+        .eq('event_key', event.eventKey)
+        .not('unique_key', 'is', null);
+
+    if (countError) {
+      throw countError;
+    }
 
     nextValue = count ?? 0;
   } else {
-    nextValue += Math.max(1, Math.min(1000, event.value ?? 1));
+    nextValue += Math.max(
+      1,
+      Math.min(1000, event.value ?? 1),
+    );
   }
 
   const completed = nextValue >= target;
+  const now = new Date().toISOString();
 
-  await supabaseAdmin.from('tobyworld_patch_progress').upsert(
-    {
-      fid,
-      patch_id: definition.id,
-      current_value: nextValue,
-      target_value: target,
-      last_progress_at: new Date().toISOString(),
-      completed_at: completed ? new Date().toISOString() : null,
-    },
-    { onConflict: 'fid,patch_id' },
-  );
-
-  if (!completed) return null;
-
-  const { data: granted, error } = await supabaseAdmin
-    .from('tobyworld_owned_patches')
+  const { error: progressError } = await supabaseAdmin
+    .from('tobyworld_patch_progress')
     .upsert(
       {
         fid,
         patch_id: definition.id,
-        source: 'engine',
-        event_id: eventId,
+        current_value: nextValue,
+        target_value: target,
+        last_progress_at: now,
+        completed_at: completed ? now : null,
       },
-      { onConflict: 'fid,patch_id', ignoreDuplicates: true },
-    )
-    .select('patch_id,earned_at,featured')
-    .maybeSingle();
+      {
+        onConflict: 'fid,patch_id',
+      },
+    );
 
-  if (error) throw error;
-  return granted;
+  if (progressError) {
+    throw progressError;
+  }
+
+  if (!completed) {
+    return null;
+  }
+
+  return grantPatch(
+    fid,
+    definition.id,
+    eventId,
+  );
 }
 
 async function evaluateTimeWindowPatch(
@@ -303,16 +441,23 @@ async function evaluateTimeWindowPatch(
   definition: PatchDefinitionRow,
   event: TravelerEventInput,
   eventId: string,
-) {
-  const eventTime = event.occurredAt ? new Date(event.occurredAt) : new Date();
+): Promise<GrantedPatchRow | null> {
+  const eventTime = event.occurredAt
+    ? new Date(event.occurredAt)
+    : new Date();
+
   const allowedHours = stringArrayRequirement(
     definition.requirement,
     'localHours',
   ).map(Number);
 
-  const numericHours = Array.isArray(definition.requirement.localHours)
+  const numericHours = Array.isArray(
+    definition.requirement.localHours,
+  )
     ? definition.requirement.localHours.filter(
-        (value): value is number => typeof value === 'number',
+        (value): value is number =>
+          typeof value === 'number' &&
+          Number.isFinite(value),
       )
     : allowedHours;
 
@@ -321,27 +466,21 @@ async function evaluateTimeWindowPatch(
       ? event.context.localHour
       : eventTime.getHours();
 
-  if (!numericHours.includes(localHour)) return null;
+  if (!numericHours.includes(localHour)) {
+    return null;
+  }
 
-  const { data, error } = await supabaseAdmin
-    .from('tobyworld_owned_patches')
-    .upsert(
-      {
-        fid,
-        patch_id: definition.id,
-        source: 'engine',
-        event_id: eventId,
-      },
-      { onConflict: 'fid,patch_id', ignoreDuplicates: true },
-    )
-    .select('patch_id,earned_at,featured')
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
+  return grantPatch(
+    fid,
+    definition.id,
+    eventId,
+  );
 }
 
-async function recordEvent(fid: number, event: TravelerEventInput) {
+async function recordEvent(
+  fid: number,
+  event: TravelerEventInput,
+) {
   if (!EVENT_KEYS.has(event.eventKey)) {
     throw new Error('Unsupported traveler event');
   }
@@ -354,8 +493,13 @@ async function recordEvent(fid: number, event: TravelerEventInput) {
     throw new Error('Invalid idempotency key');
   }
 
-  const value = Math.max(1, Math.min(1000, event.value ?? 1));
+  const value = Math.max(
+    1,
+    Math.min(1000, event.value ?? 1),
+  );
+
   const context = event.context ?? {};
+
   const uniqueKey =
     event.uniqueKey ??
     (typeof context.nodeId === 'string'
@@ -366,7 +510,10 @@ async function recordEvent(fid: number, event: TravelerEventInput) {
           ? context.pageKey
           : null);
 
-  const { data: inserted, error: insertError } = await supabaseAdmin
+  const {
+    data: insertedData,
+    error: insertError,
+  } = await supabaseAdmin
     .from('tobyworld_patch_events')
     .insert({
       fid,
@@ -375,191 +522,385 @@ async function recordEvent(fid: number, event: TravelerEventInput) {
       unique_key: uniqueKey,
       idempotency_key: event.idempotencyKey,
       context,
-      occurred_at: event.occurredAt ?? new Date().toISOString(),
+      occurred_at:
+        event.occurredAt ??
+        new Date().toISOString(),
     })
     .select('id')
-    .maybeSingle();
+    .single();
 
   if (insertError) {
     if (insertError.code === '23505') {
-      return { duplicate: true, unlockedPatchIds: [] as string[] };
+      return {
+        duplicate: true,
+        unlockedPatchIds: [] as string[],
+      };
     }
+
     throw insertError;
   }
 
+  const inserted =
+    insertedData as InsertedEventRow | null;
+
+  if (!inserted?.id) {
+    throw new Error(
+      'Traveler event was saved without returning an event ID.',
+    );
+  }
+
+  const eventId = inserted.id;
   const now = new Date();
 
-  const { data: definitions, error: definitionsError } = await supabaseAdmin
+  const {
+    data: definitionsData,
+    error: definitionsError,
+  } = await supabaseAdmin
     .from('tobyworld_patch_definitions')
     .select(
-      'id,name,short_description,lore,category,rarity,image_path,public_hint,is_hidden,sort_order,animation_key,unlock_type,event_key,requirement,starts_at,ends_at',
+      [
+        'id',
+        'name',
+        'short_description',
+        'lore',
+        'category',
+        'rarity',
+        'image_path',
+        'public_hint',
+        'is_hidden',
+        'sort_order',
+        'animation_key',
+        'unlock_type',
+        'event_key',
+        'requirement',
+        'starts_at',
+        'ends_at',
+      ].join(','),
     )
     .eq('is_active', true)
     .eq('event_key', event.eventKey);
 
-  if (definitionsError) throw definitionsError;
+  if (definitionsError) {
+    throw definitionsError;
+  }
+
+  const definitions =
+    (definitionsData ?? []) as PatchDefinitionRow[];
 
   const unlockedPatchIds: string[] = [];
 
-  for (const definition of (definitions ?? []) as PatchDefinitionRow[]) {
-    if (!isWithinAvailability(definition, now)) continue;
+  for (const definition of definitions) {
+    if (!isWithinAvailability(definition, now)) {
+      continue;
+    }
 
-    let granted = null;
+    let granted: GrantedPatchRow | null = null;
 
     if (
       definition.unlock_type === 'counter' ||
-      definition.unlock_type === 'unique_counter'
+      definition.unlock_type ===
+        'unique_counter'
     ) {
       granted = await evaluateCounterPatch(
         fid,
         definition,
         event,
-        inserted.id,
+        eventId,
       );
-    } else if (definition.unlock_type === 'time_window') {
+    } else if (
+      definition.unlock_type === 'time_window'
+    ) {
       granted = await evaluateTimeWindowPatch(
         fid,
         definition,
         event,
-        inserted.id,
+        eventId,
       );
     }
 
-    if (granted?.patch_id) unlockedPatchIds.push(granted.patch_id);
+    if (granted?.patch_id) {
+      unlockedPatchIds.push(granted.patch_id);
+    }
   }
 
-  const { count } = await supabaseAdmin
+  const {
+    count,
+    error: countError,
+  } = await supabaseAdmin
     .from('tobyworld_owned_patches')
-    .select('id', { head: true, count: 'exact' })
+    .select('id', {
+      head: true,
+      count: 'exact',
+    })
     .eq('fid', fid);
 
-  await supabaseAdmin.from('tobyworld_backpack_profiles').upsert(
-    {
-      fid,
-      backpack_tier: getBackpackTier(count ?? 0),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'fid' },
-  );
+  if (countError) {
+    throw countError;
+  }
 
-  return { duplicate: false, unlockedPatchIds };
+  const {
+    error: profileError,
+  } = await supabaseAdmin
+    .from('tobyworld_backpack_profiles')
+    .upsert(
+      {
+        fid,
+        backpack_tier: getBackpackTier(
+          count ?? 0,
+        ),
+        updated_at:
+          new Date().toISOString(),
+      },
+      {
+        onConflict: 'fid',
+      },
+    );
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  return {
+    duplicate: false,
+    unlockedPatchIds,
+  };
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+) {
   try {
-    const auth = await requireFarcasterFid(request);
+    const auth =
+      await requireFarcasterFid(request);
 
     if (!auth.ok) {
-      return jsonError(auth.error, auth.status);
+      return jsonError(
+        auth.error,
+        auth.status,
+      );
     }
 
     const pack = await loadPack(auth.fid);
-    return NextResponse.json({ ok: true, pack });
+
+    return NextResponse.json({
+      ok: true,
+      pack,
+    });
   } catch (error) {
-    console.error('Traveler pack GET failed:', error);
+    console.error(
+      'Traveler pack GET failed:',
+      error,
+    );
+
     return jsonError(
-      error instanceof Error ? error.message : 'Unable to load traveler pack',
+      error instanceof Error
+        ? error.message
+        : 'Unable to load traveler pack',
       500,
     );
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest,
+) {
   try {
-    const auth = await requireFarcasterFid(request);
+    const auth =
+      await requireFarcasterFid(request);
 
     if (!auth.ok) {
-      return jsonError(auth.error, auth.status);
+      return jsonError(
+        auth.error,
+        auth.status,
+      );
     }
 
     const fid = auth.fid;
-    const body = await request.json();
+    const body: unknown = await request.json();
 
-    if (!body || typeof body.action !== 'string') {
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      !('action' in body) ||
+      typeof body.action !== 'string'
+    ) {
       return jsonError('Missing action');
     }
 
     if (body.action === 'record_event') {
-      const result = await recordEvent(fid, body.event);
+      if (
+        !('event' in body) ||
+        !body.event ||
+        typeof body.event !== 'object'
+      ) {
+        return jsonError(
+          'Missing traveler event',
+        );
+      }
+
+      const result = await recordEvent(
+        fid,
+        body.event as TravelerEventInput,
+      );
+
       const pack = await loadPack(fid);
 
       return NextResponse.json({
         ok: true,
         duplicate: result.duplicate,
-        unlockedPatchIds: result.unlockedPatchIds,
+        unlockedPatchIds:
+          result.unlockedPatchIds,
         pack,
       });
     }
 
     if (body.action === 'update_layout') {
-      const placements = Array.isArray(body.placements)
-        ? (body.placements as PatchPlacement[])
-        : [];
+      const placements =
+        'placements' in body &&
+        Array.isArray(body.placements)
+          ? (body.placements as PatchPlacement[])
+          : [];
 
-      if (placements.length > 150) return jsonError('Too many placements');
+      if (placements.length > 150) {
+        return jsonError(
+          'Too many placements',
+        );
+      }
 
-      const sanitized = placements.map((placement, index) => ({
-        patchId: String(placement.patchId),
-        x: Math.max(0, Math.min(100, Number(placement.x))),
-        y: Math.max(0, Math.min(100, Number(placement.y))),
-        rotation: Math.max(-180, Math.min(180, Number(placement.rotation))),
-        scale: Math.max(0.35, Math.min(2.5, Number(placement.scale))),
-        zIndex: Math.max(0, Math.min(500, Number(placement.zIndex ?? index))),
-      }));
-
-      const { error } = await supabaseAdmin.rpc(
-        'tobyworld_replace_patch_layout',
-        {
-          p_fid: fid,
-          p_placements: sanitized,
-        },
+      const sanitized = placements.map(
+        (placement, index) => ({
+          patchId: String(
+            placement.patchId,
+          ),
+          x: Math.max(
+            0,
+            Math.min(
+              100,
+              Number(placement.x),
+            ),
+          ),
+          y: Math.max(
+            0,
+            Math.min(
+              100,
+              Number(placement.y),
+            ),
+          ),
+          rotation: Math.max(
+            -180,
+            Math.min(
+              180,
+              Number(placement.rotation),
+            ),
+          ),
+          scale: Math.max(
+            0.35,
+            Math.min(
+              2.5,
+              Number(placement.scale),
+            ),
+          ),
+          zIndex: Math.max(
+            0,
+            Math.min(
+              500,
+              Number(
+                placement.zIndex ??
+                  index,
+              ),
+            ),
+          ),
+        }),
       );
 
-      if (error) throw error;
-      return NextResponse.json({ ok: true });
+      const { error } =
+        await supabaseAdmin.rpc(
+          'tobyworld_replace_patch_layout',
+          {
+            p_fid: fid,
+            p_placements: sanitized,
+          },
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      return NextResponse.json({
+        ok: true,
+      });
     }
 
     if (body.action === 'feature_patch') {
       const patchId =
-        body.patchId === null || body.patchId === undefined
-          ? null
-          : String(body.patchId);
+        'patchId' in body &&
+        body.patchId !== null &&
+        body.patchId !== undefined
+          ? String(body.patchId)
+          : null;
 
-      const { error } = await supabaseAdmin.rpc(
-        'tobyworld_set_featured_patch',
-        {
-          p_fid: fid,
-          p_patch_id: patchId,
-        },
-      );
+      const { error } =
+        await supabaseAdmin.rpc(
+          'tobyworld_set_featured_patch',
+          {
+            p_fid: fid,
+            p_patch_id: patchId,
+          },
+        );
 
-      if (error) throw error;
-      return NextResponse.json({ ok: true });
+      if (error) {
+        throw error;
+      }
+
+      return NextResponse.json({
+        ok: true,
+      });
     }
 
     if (body.action === 'record_share') {
       const patchId =
-        typeof body.patchId === 'string' ? body.patchId : null;
+        'patchId' in body &&
+        typeof body.patchId === 'string'
+          ? body.patchId
+          : null;
+
+      const platform =
+        'platform' in body &&
+        typeof body.platform === 'string'
+          ? body.platform
+          : 'farcaster';
 
       const { error } = await supabaseAdmin
         .from('tobyworld_patch_shares')
         .insert({
-          fid: fid,
+          fid,
           patch_id: patchId,
-          share_type: patchId ? 'patch' : 'backpack',
-          platform:
-            typeof body.platform === 'string' ? body.platform : 'farcaster',
+          share_type: patchId
+            ? 'patch'
+            : 'backpack',
+          platform,
         });
 
-      if (error) throw error;
-      return NextResponse.json({ ok: true });
+      if (error) {
+        throw error;
+      }
+
+      return NextResponse.json({
+        ok: true,
+      });
     }
 
     return jsonError('Unknown action');
   } catch (error) {
-    console.error('Traveler pack POST failed:', error);
+    console.error(
+      'Traveler pack POST failed:',
+      error,
+    );
+
     return jsonError(
-      error instanceof Error ? error.message : 'Traveler pack request failed',
+      error instanceof Error
+        ? error.message
+        : 'Traveler pack request failed',
       500,
     );
   }
