@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
+import type { OwnedPatch } from '@/lib/tobyworld-patches';
 import { useMiniAppRuntime } from './MiniAppBoot';
 import './community-shrine.css';
 
@@ -29,7 +30,24 @@ type ShrineResponse = {
   error?: string;
 };
 
+type ShrineSdk = typeof sdk & {
+  quickAuth?: {
+    fetch?: (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => Promise<Response>;
+  };
+};
+
+type ShrinePatchEventResponse = {
+  ok?: boolean;
+  error?: string;
+  unlockedPatches?: OwnedPatch[];
+};
+
 const SHARE_VERSION = 'shrine-v3';
+const SHRINE_VISIT_SESSION_KEY =
+  'tobyworld:community-shrine-visit-session';
 
 function getShareUrl() {
   const origin =
@@ -119,12 +137,6 @@ function getInitial(event: ShrineEvent) {
     : event.riteIcon;
 }
 
-/**
- * Produces one authoritative shrine card per Farcaster user.
- *
- * Events are sorted newest-first before deduplication so the event retained
- * for each FID is always that user's most recently completed rite.
- */
 function getLatestEventsByFid(events: ShrineEvent[]) {
   const sortedEvents = [...events].sort(
     (left, right) =>
@@ -165,6 +177,115 @@ async function copyText(value: string) {
   }
 }
 
+function createSessionId() {
+  if (
+    typeof crypto !== 'undefined' &&
+    'randomUUID' in crypto
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
+
+function getShrineVisitSessionId() {
+  const existing = window.sessionStorage.getItem(
+    SHRINE_VISIT_SESSION_KEY,
+  );
+
+  if (existing) return existing;
+
+  const sessionId = createSessionId();
+
+  window.sessionStorage.setItem(
+    SHRINE_VISIT_SESSION_KEY,
+    sessionId,
+  );
+
+  return sessionId;
+}
+
+function revealShrinePatchUnlocks(
+  patches: OwnedPatch[] | undefined,
+) {
+  if (
+    !Array.isArray(patches) ||
+    patches.length === 0
+  ) {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent('tobyworld:patch-unlocked', {
+      detail: patches,
+    }),
+  );
+}
+
+async function recordShrineVisit() {
+  const quickAuth = (sdk as ShrineSdk).quickAuth;
+
+  if (!quickAuth?.fetch) return;
+
+  const sessionId = getShrineVisitSessionId();
+
+  try {
+    const response = await quickAuth.fetch(
+      '/api/tobyworld/traveler-pack',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({
+          action: 'record_event',
+          event: {
+            eventKey: 'page_visited',
+            value: 1,
+            uniqueKey: 'community-shrine',
+            idempotencyKey:
+              `shrine-visit:${sessionId}`,
+            context: {
+              pageKey: 'community-shrine',
+              sessionId,
+              path: window.location.pathname,
+            },
+            occurredAt: new Date().toISOString(),
+          },
+        }),
+      },
+    );
+
+    const result =
+      (await response.json()) as ShrinePatchEventResponse;
+
+    if (!response.ok || !result.ok) {
+      console.error(
+        'Shrine visit patch event rejected:',
+        result.error ?? response.statusText,
+      );
+
+      return;
+    }
+
+    revealShrinePatchUnlocks(
+      result.unlockedPatches,
+    );
+  } catch (error) {
+    /*
+     * The Shrine remains readable even if the
+     * optional patch event cannot be recorded.
+     */
+    console.error(
+      'Shrine visit patch event failed:',
+      error,
+    );
+  }
+}
+
 export function CommunityShrine() {
   const miniApp = useMiniAppRuntime();
 
@@ -177,12 +298,10 @@ export function CommunityShrine() {
   const [notice, setNotice] =
     useState<string | null>(null);
 
+  const didRecordVisitRef = useRef(false);
+
   const rawEvents = data?.events ?? [];
 
-  /**
-   * This is now the only event collection used for display.
-   * There can never be more than one card per FID.
-   */
   const events = useMemo(
     () => getLatestEventsByFid(rawEvents),
     [rawEvents],
@@ -193,9 +312,6 @@ export function CommunityShrine() {
     [events],
   );
 
-  /**
-   * Do not repeat the featured user again in the standard list.
-   */
   const listEvents = useMemo(() => {
     if (!topEvent) return events;
 
@@ -260,6 +376,18 @@ export function CommunityShrine() {
       window.clearInterval(interval);
     };
   }, [fetchShrine]);
+
+  useEffect(() => {
+    if (
+      !miniApp.isMiniApp ||
+      didRecordVisitRef.current
+    ) {
+      return;
+    }
+
+    didRecordVisitRef.current = true;
+    void recordShrineVisit();
+  }, [miniApp.isMiniApp]);
 
   async function inviteToShrine() {
     const shareText = getShrineInviteText();
