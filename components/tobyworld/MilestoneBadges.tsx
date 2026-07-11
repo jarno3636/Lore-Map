@@ -1,7 +1,7 @@
 'use client';
 
 import { sdk } from '@farcaster/miniapp-sdk';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useAccount,
   useConnect,
@@ -11,6 +11,7 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from 'wagmi';
+import type { OwnedPatch } from '@/lib/tobyworld-patches';
 import {
   TOBYWORLD_MILESTONES,
   formatMilestoneNumber,
@@ -77,6 +78,16 @@ type ClaimResponse = {
   };
 };
 
+type PatchApiResponse = {
+  ok?: boolean;
+  error?: string;
+  unlockedPatches?: OwnedPatch[];
+};
+
+type RelicConfirmationResponse = PatchApiResponse & {
+  confirmed?: boolean;
+};
+
 type QuickAuthFetch = typeof fetch;
 
 type QuickAuthSdk = typeof sdk & {
@@ -104,6 +115,120 @@ function getBoundQuickAuthFetch() {
   }
 
   return quickAuth.fetch.bind(quickAuth);
+}
+
+function revealMilestonePatchUnlocks(
+  patches: OwnedPatch[] | undefined,
+) {
+  if (!Array.isArray(patches) || patches.length === 0) return;
+
+  window.dispatchEvent(
+    new CustomEvent('tobyworld:patch-unlocked', {
+      detail: patches,
+    }),
+  );
+}
+
+async function recordRelicView(
+  milestone: TobyworldMilestone,
+) {
+  const authFetch = getBoundQuickAuthFetch();
+  if (!authFetch) return;
+
+  try {
+    const response = await authFetch(
+      '/api/tobyworld/traveler-pack',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({
+          action: 'record_event',
+          event: {
+            eventKey: 'relic_viewed',
+            value: 1,
+            uniqueKey: String(milestone.tokenId),
+            idempotencyKey: `relic-view:${milestone.tokenId}`,
+            context: {
+              relicId: String(milestone.id),
+              tokenId: milestone.tokenId,
+              title: milestone.title,
+              threshold: milestone.threshold,
+              path: window.location.pathname,
+            },
+            occurredAt: new Date().toISOString(),
+          },
+        }),
+      },
+    );
+
+    const result = (await response.json()) as PatchApiResponse;
+
+    if (!response.ok || !result.ok) {
+      console.error(
+        'Relic view patch event rejected:',
+        result.error ?? response.statusText,
+      );
+      return;
+    }
+
+    revealMilestonePatchUnlocks(result.unlockedPatches);
+  } catch (error) {
+    console.error('Relic view patch event failed:', error);
+  }
+}
+
+async function confirmRelicClaim({
+  walletAddress,
+  tokenId,
+  transactionHash,
+}: {
+  walletAddress: `0x${string}`;
+  tokenId: number;
+  transactionHash: `0x${string}`;
+}) {
+  const authFetch = getBoundQuickAuthFetch();
+
+  if (!authFetch) {
+    return {
+      confirmed: false,
+      unlockedPatches: [] as OwnedPatch[],
+    };
+  }
+
+  const response = await authFetch(
+    getApiUrl('/api/tobyworld/milestone-claim/confirm'),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+      body: JSON.stringify({
+        walletAddress,
+        tokenId,
+        transactionHash,
+      }),
+    },
+  );
+
+  const result =
+    (await response.json()) as RelicConfirmationResponse;
+
+  if (!response.ok || !result.ok || !result.confirmed) {
+    throw new Error(
+      result.error || 'Relic ownership confirmation failed.',
+    );
+  }
+
+  revealMilestonePatchUnlocks(result.unlockedPatches);
+
+  return {
+    confirmed: true,
+    unlockedPatches: result.unlockedPatches ?? [],
+  };
 }
 
 function getFallbackData(): MilestonesResponse {
@@ -172,6 +297,8 @@ export function MilestoneBadges() {
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingTokenId, setPendingTokenId] = useState<number | null>(null);
   const [lastHash, setLastHash] = useState<`0x${string}` | undefined>();
+
+  const confirmedAwardHashRef = useRef<string | null>(null);
 
   const { address, chainId, isConnected } = useAccount();
   const { connectors, connect, isPending: isConnecting } = useConnect();
@@ -287,17 +414,73 @@ export function MilestoneBadges() {
   }, [fetchMilestones]);
 
   useEffect(() => {
-    if (!isConfirmed || !receipt) return;
-
-    setNotice('Relic claimed. The pond has written your mark onchain.');
-    setPendingTokenId(null);
-
-    void fetchMilestones();
-
-    if (canReadBalances) {
-      void refetchBalances();
+    if (
+      !isConfirmed ||
+      !receipt ||
+      !address ||
+      pendingTokenId === null
+    ) {
+      return;
     }
-  }, [canReadBalances, fetchMilestones, isConfirmed, receipt, refetchBalances]);
+
+    const transactionHash = receipt.transactionHash;
+
+    if (
+      confirmedAwardHashRef.current === transactionHash
+    ) {
+      return;
+    }
+
+    confirmedAwardHashRef.current = transactionHash;
+
+    const claimedTokenId = pendingTokenId;
+
+    void (async () => {
+      try {
+        const confirmation = await confirmRelicClaim({
+          walletAddress: address,
+          tokenId: claimedTokenId,
+          transactionHash,
+        });
+
+        setNotice(
+          confirmation.unlockedPatches.length > 0
+            ? `Relic claimed. ${confirmation.unlockedPatches.length} new patch${
+                confirmation.unlockedPatches.length === 1 ? '' : 'es'
+              } stitched.`
+            : 'Relic claimed. The pond has written your mark onchain.',
+        );
+      } catch (error) {
+        /*
+         * The onchain claim remains valid even if the optional
+         * patch confirmation endpoint is temporarily unavailable.
+         */
+        console.error(
+          'Relic patch confirmation failed:',
+          error,
+        );
+
+        setNotice(
+          'Relic claimed onchain. Patch confirmation can be recovered later.',
+        );
+      } finally {
+        setPendingTokenId(null);
+        void fetchMilestones();
+
+        if (canReadBalances) {
+          void refetchBalances();
+        }
+      }
+    })();
+  }, [
+    address,
+    canReadBalances,
+    fetchMilestones,
+    isConfirmed,
+    pendingTokenId,
+    receipt,
+    refetchBalances,
+  ]);
 
   function connectWallet() {
     setNotice(null);
@@ -404,6 +587,7 @@ export function MilestoneBadges() {
       });
 
       sent = true;
+      confirmedAwardHashRef.current = null;
       setLastHash(hash);
       setNotice(
         claimData.userEchoPower
@@ -556,6 +740,9 @@ export function MilestoneBadges() {
                 milestone.progress.unlocked ? 'is-unlocked' : 'is-locked'
               } ${claimed ? 'is-claimed' : ''}`}
               key={milestone.id}
+              onClickCapture={() => {
+                void recordRelicView(milestone);
+              }}
             >
               <div className="milestone-relic-card-image">
                 <img src={milestone.imageSrc} alt={milestone.title} />
