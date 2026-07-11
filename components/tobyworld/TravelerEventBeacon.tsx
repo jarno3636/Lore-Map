@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { useCallback, useEffect, useRef } from 'react';
 import type {
+  OwnedPatch,
   TravelerEventInput,
   TravelerEventKey,
 } from '@/lib/tobyworld-patches';
@@ -19,9 +20,15 @@ type BeaconDetail = {
   context?: Record<string, unknown>;
 };
 
+type EventApiResponse = {
+  ok: boolean;
+  unlockedPatches?: OwnedPatch[];
+};
+
 declare global {
   interface WindowEventMap {
     'tobyworld:traveler-event': CustomEvent<BeaconDetail>;
+    'tobyworld:patch-unlocked': CustomEvent<OwnedPatch[]>;
   }
 
   interface Window {
@@ -49,7 +56,7 @@ function getSessionId() {
   return next;
 }
 
-export async function emitTravelerEvent(detail: BeaconDetail) {
+export function emitTravelerEvent(detail: BeaconDetail) {
   if (typeof window === 'undefined') return;
 
   window.dispatchEvent(
@@ -67,24 +74,45 @@ export default function TravelerEventBeacon({
 
   const flush = useCallback(async () => {
     if (flushingRef.current || queueRef.current.length === 0) return;
-    flushingRef.current = true;
 
     const next = queueRef.current.shift();
+    if (!next) return;
+
+    flushingRef.current = true;
 
     try {
-      await sdk.quickAuth.fetch('/api/tobyworld/traveler-pack', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true,
-        body: JSON.stringify({
-          action: 'record_event',
-          event: next,
-        }),
-      });
+      const response = await sdk.quickAuth.fetch(
+        '/api/tobyworld/traveler-pack',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify({
+            action: 'record_event',
+            event: next,
+          }),
+        },
+      );
+
+      const result = (await response.json()) as EventApiResponse;
+
+      if (
+        response.ok &&
+        result.ok &&
+        Array.isArray(result.unlockedPatches) &&
+        result.unlockedPatches.length > 0
+      ) {
+        window.dispatchEvent(
+          new CustomEvent('tobyworld:patch-unlocked', {
+            detail: result.unlockedPatches,
+          }),
+        );
+      }
     } catch {
-      if (next) queueRef.current.unshift(next);
+      queueRef.current.unshift(next);
     } finally {
       flushingRef.current = false;
+
       if (queueRef.current.length > 0) {
         window.setTimeout(flush, 220);
       }
@@ -125,9 +153,9 @@ export default function TravelerEventBeacon({
   useEffect(() => {
     window.tobyworldTravelerEvent = enqueue;
 
-    const listener = (
-      event: CustomEvent<BeaconDetail>,
-    ) => enqueue(event.detail);
+    const listener = (event: CustomEvent<BeaconDetail>) => {
+      enqueue(event.detail);
+    };
 
     window.addEventListener('tobyworld:traveler-event', listener);
 
@@ -149,7 +177,7 @@ export default function TravelerEventBeacon({
 
     enqueue({
       eventKey: 'page_visited',
-      uniqueKey: pageKey,
+      uniqueKey: `${getSessionId()}:${pageKey}`,
       context: {
         pageKey,
         sessionPageCount: nextPages.length,
@@ -164,7 +192,7 @@ export default function TravelerEventBeacon({
       window.setTimeout(() => {
         enqueue({
           eventKey: 'session_duration_reached',
-          uniqueKey: `${minutes}m`,
+          uniqueKey: `${getSessionId()}:${minutes}m`,
           context: {
             minutes,
             mountedAt: mountedAtRef.current,

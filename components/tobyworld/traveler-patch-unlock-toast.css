@@ -1,0 +1,143 @@
+.traveler-unlock {
+  position: fixed;
+  z-index: 200;
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  width: min(390px, calc(100vw - 28px));
+  overflow: hidden;
+  padding: 12px 13px;
+  border: 1px solid rgba(228, 198, 125, 0.28);
+  border-radius: 20px;
+  color: #f8ecd0;
+  background:
+    radial-gradient(circle at 10% 50%, rgba(224, 183, 90, 0.15), transparent 38%),
+    linear-gradient(150deg, rgba(49, 48, 38, 0.97), rgba(23, 31, 28, 0.98));
+  box-shadow:
+    0 22px 55px rgba(0, 0, 0, 0.38),
+    inset 0 1px rgba(255, 255, 255, 0.05);
+  animation: traveler-unlock-enter 480ms cubic-bezier(.2,.9,.25,1.15);
+  backdrop-filter: blur(18px);
+}
+
+.traveler-unlock__glow {
+  position: absolute;
+  inset: -40%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(240, 203, 112, 0.14), transparent 38%);
+  animation: traveler-unlock-glow 3.6s ease-in-out infinite;
+}
+
+.traveler-unlock__patch {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  overflow: hidden;
+  border: 4px double #d3aa5c;
+  border-radius: 50%;
+  background: #765739;
+  box-shadow: 0 7px 16px rgba(0, 0, 0, 0.32);
+}
+
+.traveler-unlock__patch img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.traveler-unlock > div:nth-of-type(3) {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.traveler-unlock small,
+.traveler-unlock strong,
+.traveler-unlock p {
+  display: block;
+}
+
+.traveler-unlock small {
+  margin-bottom: 3px;
+  color: rgba(236, 206, 137, 0.7);
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.traveler-unlock strong {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.08rem;
+}
+
+.traveler-unlock p {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traveler-unlock button {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  border: 0;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  font-size: 1.2rem;
+}
+
+.traveler-unlock--mythic {
+  box-shadow:
+    0 22px 55px rgba(0, 0, 0, 0.38),
+    0 0 28px rgba(105, 190, 187, 0.22);
+}
+
+.traveler-unlock--legend {
+  box-shadow:
+    0 22px 55px rgba(0, 0, 0, 0.38),
+    0 0 34px rgba(231, 187, 82, 0.3);
+}
+
+@keyframes traveler-unlock-enter {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes traveler-unlock-glow {
+  0%, 100% { opacity: 0.45; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+@media (max-width: 600px) {
+  .traveler-unlock {
+    right: 14px;
+    bottom: 14px;
+    left: 14px;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .traveler-unlock,
+  .traveler-unlock__glow {
+    animation: none;
+  }
+}
