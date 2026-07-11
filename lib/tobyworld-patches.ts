@@ -15,14 +15,11 @@ export type PatchRarity =
   | 'mythic'
   | 'legend';
 
-export type UnlockType =
-  | 'counter'
-  | 'unique_counter'
-  | 'sequence'
-  | 'time_window'
-  | 'seasonal'
-  | 'manual'
-  | 'external';
+export type PatchProgressMode =
+  | 'increment'
+  | 'maximum'
+  | 'unique'
+  | 'boolean';
 
 export type BackpackTier =
   | 'wanderer'
@@ -145,8 +142,13 @@ export function getBackpackTier(patchCount: number): BackpackTier {
 
 export function getTierProgress(patchCount: number) {
   const thresholds = [0, 5, 15, 30, 50, 75];
-  const currentIndex = thresholds.findLastIndex((value) => patchCount >= value);
-  const current = thresholds[Math.max(0, currentIndex)];
+  let currentIndex = 0;
+
+  for (let index = 0; index < thresholds.length; index += 1) {
+    if (patchCount >= thresholds[index]) currentIndex = index;
+  }
+
+  const current = thresholds[currentIndex];
   const next = thresholds[currentIndex + 1];
 
   if (next === undefined) {
@@ -189,4 +191,57 @@ export function buildDefaultLayout(patchIds: string[]): PatchPlacement[] {
       zIndex: base.zIndex + index,
     };
   });
+}
+
+export function isTravelerEventInput(
+  value: unknown,
+): value is TravelerEventInput {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    return false;
+  }
+
+  const event = value as Record<string, unknown>;
+
+  return (
+    typeof event.eventKey === 'string' &&
+    typeof event.idempotencyKey === 'string'
+  );
+}
+
+function sanitizeNumber(
+  value: unknown,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(minimum, Math.min(maximum, parsed));
+}
+
+export function sanitizePlacements(value: unknown): PatchPlacement[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .slice(0, 150)
+    .filter(
+      (item): item is Record<string, unknown> =>
+        typeof item === 'object' && item !== null && !Array.isArray(item),
+    )
+    .map((placement, index) => ({
+      patchId: String(placement.patchId ?? ''),
+      x: sanitizeNumber(placement.x, 50, 0, 100),
+      y: sanitizeNumber(placement.y, 50, 0, 100),
+      rotation: sanitizeNumber(placement.rotation, 0, -180, 180),
+      scale: sanitizeNumber(placement.scale, 1, 0.35, 2.5),
+      zIndex: Math.round(
+        sanitizeNumber(placement.zIndex, index, 0, 500),
+      ),
+    }))
+    .filter((placement) => placement.patchId.length > 0);
 }
