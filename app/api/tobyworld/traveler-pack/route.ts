@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireFarcasterUser } from '@/lib/auth/require-farcaster-user';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { requireFarcasterFid } from '@/lib/farcaster/quick-auth';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
 import {
   buildDefaultLayout,
   getBackpackTier,
@@ -9,6 +9,8 @@ import {
 } from '@/lib/tobyworld-patches';
 
 export const dynamic = 'force-dynamic';
+
+const supabaseAdmin = getSupabaseAdmin();
 
 type PatchDefinitionRow = {
   id: string;
@@ -443,20 +445,34 @@ async function recordEvent(fid: number, event: TravelerEventInput) {
   return { duplicate: false, unlockedPatchIds };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const user = await requireFarcasterUser();
-    const pack = await loadPack(user.fid);
+    const auth = await requireFarcasterFid(request);
+
+    if (!auth.ok) {
+      return jsonError(auth.error, auth.status);
+    }
+
+    const pack = await loadPack(auth.fid);
     return NextResponse.json({ ok: true, pack });
   } catch (error) {
     console.error('Traveler pack GET failed:', error);
-    return jsonError('Unable to load traveler pack', 500);
+    return jsonError(
+      error instanceof Error ? error.message : 'Unable to load traveler pack',
+      500,
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireFarcasterUser();
+    const auth = await requireFarcasterFid(request);
+
+    if (!auth.ok) {
+      return jsonError(auth.error, auth.status);
+    }
+
+    const fid = auth.fid;
     const body = await request.json();
 
     if (!body || typeof body.action !== 'string') {
@@ -464,8 +480,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.action === 'record_event') {
-      const result = await recordEvent(user.fid, body.event);
-      const pack = await loadPack(user.fid);
+      const result = await recordEvent(fid, body.event);
+      const pack = await loadPack(fid);
 
       return NextResponse.json({
         ok: true,
@@ -494,7 +510,7 @@ export async function POST(request: NextRequest) {
       const { error } = await supabaseAdmin.rpc(
         'tobyworld_replace_patch_layout',
         {
-          p_fid: user.fid,
+          p_fid: fid,
           p_placements: sanitized,
         },
       );
@@ -512,7 +528,7 @@ export async function POST(request: NextRequest) {
       const { error } = await supabaseAdmin.rpc(
         'tobyworld_set_featured_patch',
         {
-          p_fid: user.fid,
+          p_fid: fid,
           p_patch_id: patchId,
         },
       );
@@ -528,7 +544,7 @@ export async function POST(request: NextRequest) {
       const { error } = await supabaseAdmin
         .from('tobyworld_patch_shares')
         .insert({
-          fid: user.fid,
+          fid: fid,
           patch_id: patchId,
           share_type: patchId ? 'patch' : 'backpack',
           platform:
