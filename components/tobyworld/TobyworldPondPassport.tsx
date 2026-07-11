@@ -10,6 +10,7 @@ import {
   useSignMessage,
 } from 'wagmi';
 import type { Connector } from 'wagmi';
+import type { OwnedPatch } from '@/lib/tobyworld-patches';
 import { TOBYWORLD_SWAP_TOKENS } from '@/lib/tobyworld-swap-tokens';
 import './tobyworld-pond-passport.css';
 
@@ -47,6 +48,8 @@ type PassportResponse = {
     rerollsRemaining: number;
     cooldownSeconds: number;
   };
+  unlockedPatchIds?: string[];
+  unlockedPatches?: OwnedPatch[];
 };
 
 type MiniAppUserContext = {
@@ -57,16 +60,22 @@ type MiniAppUserContext = {
 };
 
 type PassportSdk = typeof sdk & {
-  context?: { user?: MiniAppUserContext } | Promise<{ user?: MiniAppUserContext }>;
+  context?:
+    | { user?: MiniAppUserContext }
+    | Promise<{ user?: MiniAppUserContext }>;
   isInMiniApp?: () => boolean | Promise<boolean>;
   quickAuth?: { fetch?: typeof fetch };
   actions?: {
-    composeCast?: (params: { text: string; embeds?: string[] }) => Promise<void> | void;
+    composeCast?: (params: {
+      text: string;
+      embeds?: string[];
+    }) => Promise<void> | void;
     openUrl?: (url: string) => Promise<void> | void;
   };
 };
 
-type TobyworldAsset = (typeof TOBYWORLD_SWAP_TOKENS)[number];
+type TobyworldAsset =
+  (typeof TOBYWORLD_SWAP_TOKENS)[number];
 
 type PassportSharePayload = {
   title: string;
@@ -96,9 +105,18 @@ type WalletSupportResponse = {
   error?: string;
 };
 
+type PatchEventResponse = {
+  ok?: boolean;
+  unlockedPatches?: OwnedPatch[];
+};
+
 type FileShareNavigator = Navigator & {
   canShare?: (data: { files?: File[] }) => boolean;
-  share?: (data: { title?: string; text?: string; files?: File[] }) => Promise<void>;
+  share?: (data: {
+    title?: string;
+    text?: string;
+    files?: File[];
+  }) => Promise<void>;
 };
 
 const ERC20_BALANCE_ABI = [
@@ -156,32 +174,127 @@ function getPublicOrigin() {
     process.env.NEXT_PUBLIC_SITE_URL?.trim();
 
   if (configured) return configured.replace(/\/+$/, '');
-  if (typeof window !== 'undefined') return window.location.origin;
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
   return 'https://toby-atlas.vercel.app';
 }
 
 function getQuickAuthFetch() {
   const quickAuth = (sdk as PassportSdk).quickAuth;
-  return quickAuth?.fetch ? quickAuth.fetch.bind(quickAuth) : null;
+
+  return quickAuth?.fetch
+    ? quickAuth.fetch.bind(quickAuth)
+    : null;
 }
 
-function formatNumber(value: number | null | undefined) {
-  return new Intl.NumberFormat('en-US').format(value ?? 0);
+function revealPassportPatchUnlocks(
+  patches: OwnedPatch[] | undefined,
+) {
+  if (
+    typeof window === 'undefined' ||
+    !Array.isArray(patches) ||
+    patches.length === 0
+  ) {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent('tobyworld:patch-unlocked', {
+      detail: patches,
+    }),
+  );
+}
+
+async function recordPassportSharePatch(
+  shareUrl: string,
+) {
+  const authFetch = getQuickAuthFetch();
+
+  if (!authFetch) {
+    return [] as OwnedPatch[];
+  }
+
+  try {
+    const response = await authFetch(
+      `${getPublicOrigin()}/api/tobyworld/traveler-pack`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({
+          action: 'record_event',
+          event: {
+            eventKey: 'passport_shared',
+            value: 1,
+            uniqueKey: shareUrl,
+            idempotencyKey: `passport-share:${shareUrl}`,
+            context: {
+              shareUrl,
+              path: window.location.pathname,
+            },
+            occurredAt: new Date().toISOString(),
+          },
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const result =
+      (await response.json()) as PatchEventResponse;
+
+    revealPassportPatchUnlocks(
+      result.unlockedPatches,
+    );
+
+    return result.unlockedPatches ?? [];
+  } catch (error) {
+    console.error(
+      'Passport share patch event failed:',
+      error,
+    );
+
+    return [];
+  }
+}
+
+function formatNumber(
+  value: number | null | undefined,
+) {
+  return new Intl.NumberFormat('en-US').format(
+    value ?? 0,
+  );
 }
 
 function shortenAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function compactText(value: string, maxLength: number) {
-  const clean = value.trim().replace(/\s+/g, ' ');
+function compactText(
+  value: string,
+  maxLength: number,
+) {
+  const clean = value
+    .trim()
+    .replace(/\s+/g, ' ');
+
   return clean.length <= maxLength
     ? clean
-    : `${clean.slice(0, maxLength - 1).trim()}…`;
+    : `${clean
+        .slice(0, maxLength - 1)
+        .trim()}…`;
 }
 
 function getTodayUtcDate() {
-  return new Date().toISOString().slice(0, 10);
+  return new Date()
+    .toISOString()
+    .slice(0, 10);
 }
 
 function getDisplayName(
@@ -194,8 +307,12 @@ function getDisplayName(
     snapshot?.displayName ||
     contextUser?.username ||
     snapshot?.username ||
-    (snapshot?.fid ? `FID ${snapshot.fid}` : null) ||
-    (address ? shortenAddress(address) : null) ||
+    (snapshot?.fid
+      ? `FID ${snapshot.fid}`
+      : null) ||
+    (address
+      ? shortenAddress(address)
+      : null) ||
     'Unstamped Frog'
   );
 }
@@ -205,16 +322,24 @@ function getHandle(
   contextUser?: MiniAppUserContext | null,
   address?: string,
 ) {
-  const username = contextUser?.username || snapshot?.username;
+  const username =
+    contextUser?.username ||
+    snapshot?.username;
+
   if (username) return `@${username}`;
   if (address) return 'Wallet supporter';
+
   return 'Tobyworld traveler';
 }
 
 function hashText(value: string) {
   let hash = 2166136261;
 
-  for (let index = 0; index < value.length; index += 1) {
+  for (
+    let index = 0;
+    index < value.length;
+    index += 1
+  ) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
@@ -222,25 +347,52 @@ function hashText(value: string) {
   return hash >>> 0;
 }
 
-function pick<T>(items: readonly T[], seed: number) {
-  return items[Math.abs(seed) % items.length];
+function pick<T>(
+  items: readonly T[],
+  seed: number,
+) {
+  return items[
+    Math.abs(seed) % items.length
+  ];
 }
 
-function pickBackupFrogImage(seed: string | number | undefined) {
-  const hash = hashText(String(seed ?? 'pond'));
-  return PASSPORT_FROG_BACKUPS[hash % PASSPORT_FROG_BACKUPS.length];
+function pickBackupFrogImage(
+  seed: string | number | undefined,
+) {
+  const hash = hashText(
+    String(seed ?? 'pond'),
+  );
+
+  return PASSPORT_FROG_BACKUPS[
+    hash % PASSPORT_FROG_BACKUPS.length
+  ];
 }
 
 function toBigIntBalance(value: unknown) {
-  if (typeof value === 'bigint') return value;
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === 'bigint') {
+    return value;
+  }
+
+  if (
+    typeof value === 'number' &&
+    Number.isFinite(value)
+  ) {
     return BigInt(Math.floor(value));
   }
-  if (typeof value === 'string' && value.trim()) return BigInt(value);
+
+  if (
+    typeof value === 'string' &&
+    value.trim()
+  ) {
+    return BigInt(value);
+  }
+
   return BigInt(0);
 }
 
-function buildWalletSupportMessage(address: string) {
+function buildWalletSupportMessage(
+  address: string,
+) {
   return [
     'Tobyworld Pond Passport',
     '',
@@ -254,26 +406,58 @@ function buildWalletSupportMessage(address: string) {
   ].join('\n');
 }
 
-function createWalletPersona(address: string, heldAssets: TobyworldAsset[]): PondPersona {
-  const heldSymbols = heldAssets.map((asset) => asset.symbol).join(' + ');
-  const seed = hashText(`${address}:${heldSymbols}:${getTodayUtcDate()}`);
-  const title = pick(WALLET_TITLES, seed);
+function createWalletPersona(
+  address: string,
+  heldAssets: TobyworldAsset[],
+): PondPersona {
+  const heldSymbols = heldAssets
+    .map((asset) => asset.symbol)
+    .join(' + ');
+
+  const seed = hashText(
+    `${address}:${heldSymbols}:${getTodayUtcDate()}`,
+  );
+
+  const title = pick(
+    WALLET_TITLES,
+    seed,
+  );
 
   return {
     title,
-    characteristic: pick(WALLET_CHARACTERISTICS, seed >> 3),
-    strangeHabit: pick(WALLET_HABITS, seed >> 6),
-    pondWarning: pick(WALLET_WARNINGS, seed >> 9),
-    stamp: pick(['△ · 🐸 · 🍃', '🐸 · ⇄ · ✦', '🍃 · 🐸 · 🪪'], seed >> 12),
-    shareText: `My Tobyworld Pond Passport has been stamped: ${title}.`,
+    characteristic: pick(
+      WALLET_CHARACTERISTICS,
+      seed >> 3,
+    ),
+    strangeHabit: pick(
+      WALLET_HABITS,
+      seed >> 6,
+    ),
+    pondWarning: pick(
+      WALLET_WARNINGS,
+      seed >> 9,
+    ),
+    stamp: pick(
+      [
+        '△ · 🐸 · 🍃',
+        '🐸 · ⇄ · ✦',
+        '🍃 · 🐸 · 🪪',
+      ],
+      seed >> 12,
+    ),
+    shareText:
+      `My Tobyworld Pond Passport has been stamped: ${title}.`,
   };
 }
 
-function createWalletSnapshot(address: string): PassportSnapshot {
+function createWalletSnapshot(
+  address: string,
+): PassportSnapshot {
   return {
     fid: 0,
     username: null,
-    displayName: `Wallet ${shortenAddress(address)}`,
+    displayName:
+      `Wallet ${shortenAddress(address)}`,
     currentMark: 'Wallet Supporter',
     streakCount: 1,
     bestStreak: 1,
@@ -285,20 +469,52 @@ function createWalletSnapshot(address: string): PassportSnapshot {
   };
 }
 
-function connectorLabel(connector: Connector) {
-  const name = connector.name.toLowerCase();
-  if (name.includes('farcaster')) return 'Farcaster Wallet';
-  if (name.includes('walletconnect')) return 'WalletConnect';
-  if (name.includes('base') || name.includes('coinbase')) return 'Base Account';
-  if (name.includes('injected')) return 'Browser Wallet';
+function connectorLabel(
+  connector: Connector,
+) {
+  const name =
+    connector.name.toLowerCase();
+
+  if (name.includes('farcaster')) {
+    return 'Farcaster Wallet';
+  }
+
+  if (name.includes('walletconnect')) {
+    return 'WalletConnect';
+  }
+
+  if (
+    name.includes('base') ||
+    name.includes('coinbase')
+  ) {
+    return 'Base Account';
+  }
+
+  if (name.includes('injected')) {
+    return 'Browser Wallet';
+  }
+
   return connector.name;
 }
 
-function getPassportPhotoUrl(pfpUrl: string | undefined, fallback: string) {
-  if (!pfpUrl) return new URL(fallback, getPublicOrigin()).toString();
+function getPassportPhotoUrl(
+  pfpUrl: string | undefined,
+  fallback: string,
+) {
+  if (!pfpUrl) {
+    return new URL(
+      fallback,
+      getPublicOrigin(),
+    ).toString();
+  }
 
-  const proxy = new URL('/api/tobyworld/passport-photo', getPublicOrigin());
+  const proxy = new URL(
+    '/api/tobyworld/passport-photo',
+    getPublicOrigin(),
+  );
+
   proxy.searchParams.set('url', pfpUrl);
+
   return proxy.toString();
 }
 
@@ -310,13 +526,42 @@ function roundedRect(
   height: number,
   radius: number,
 ) {
-  const r = Math.min(radius, width / 2, height / 2);
+  const r = Math.min(
+    radius,
+    width / 2,
+    height / 2,
+  );
+
   context.beginPath();
   context.moveTo(x + r, y);
-  context.arcTo(x + width, y, x + width, y + height, r);
-  context.arcTo(x + width, y + height, x, y + height, r);
-  context.arcTo(x, y + height, x, y, r);
-  context.arcTo(x, y, x + width, y, r);
+  context.arcTo(
+    x + width,
+    y,
+    x + width,
+    y + height,
+    r,
+  );
+  context.arcTo(
+    x + width,
+    y + height,
+    x,
+    y + height,
+    r,
+  );
+  context.arcTo(
+    x,
+    y + height,
+    x,
+    y,
+    r,
+  );
+  context.arcTo(
+    x,
+    y,
+    x + width,
+    y,
+    r,
+  );
   context.closePath();
 }
 
@@ -329,14 +574,22 @@ function drawWrappedText(
   lineHeight: number,
   maxLines: number,
 ) {
-  const words = text.trim().split(/\s+/);
+  const words = text
+    .trim()
+    .split(/\s+/);
+
   const lines: string[] = [];
   let line = '';
 
   for (const word of words) {
-    const candidate = line ? `${line} ${word}` : word;
+    const candidate = line
+      ? `${line} ${word}`
+      : word;
 
-    if (context.measureText(candidate).width <= maxWidth) {
+    if (
+      context.measureText(candidate).width <=
+      maxWidth
+    ) {
       line = candidate;
       continue;
     }
@@ -344,39 +597,76 @@ function drawWrappedText(
     if (line) lines.push(line);
     line = word;
 
-    if (lines.length === maxLines - 1) break;
+    if (
+      lines.length ===
+      maxLines - 1
+    ) {
+      break;
+    }
   }
 
-  if (line && lines.length < maxLines) lines.push(line);
+  if (
+    line &&
+    lines.length < maxLines
+  ) {
+    lines.push(line);
+  }
 
-  if (lines.join(' ').length < text.length && lines.length) {
-    let last = lines[lines.length - 1];
+  if (
+    lines.join(' ').length <
+      text.length &&
+    lines.length
+  ) {
+    let last =
+      lines[lines.length - 1];
 
-    while (last.length > 1 && context.measureText(`${last}…`).width > maxWidth) {
+    while (
+      last.length > 1 &&
+      context.measureText(`${last}…`)
+        .width > maxWidth
+    ) {
       last = last.slice(0, -1);
     }
 
-    lines[lines.length - 1] = `${last.trim()}…`;
+    lines[lines.length - 1] =
+      `${last.trim()}…`;
   }
 
   lines.forEach((value, index) => {
-    context.fillText(value, x, y + index * lineHeight);
+    context.fillText(
+      value,
+      x,
+      y + index * lineHeight,
+    );
   });
 
   return lines.length;
 }
 
 function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`Image failed to load: ${src}`));
-    image.src = src;
-  });
+  return new Promise<HTMLImageElement>(
+    (resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+
+      image.onload = () =>
+        resolve(image);
+
+      image.onerror = () =>
+        reject(
+          new Error(
+            `Image failed to load: ${src}`,
+          ),
+        );
+
+      image.src = src;
+    },
+  );
 }
 
-async function loadFirstImage(candidates: string[]) {
+async function loadFirstImage(
+  candidates: string[],
+) {
   for (const candidate of candidates) {
     try {
       return await loadImage(candidate);
@@ -388,39 +678,114 @@ async function loadFirstImage(candidates: string[]) {
   return null;
 }
 
-async function renderPassportPng(payload: PassportSharePayload, fallbackPhoto: string) {
-  const canvas = document.createElement('canvas');
+async function renderPassportPng(
+  payload: PassportSharePayload,
+  fallbackPhoto: string,
+) {
+  const canvas =
+    document.createElement('canvas');
+
   canvas.width = 1200;
   canvas.height = 800;
 
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Canvas rendering is unavailable.');
+  const context =
+    canvas.getContext('2d');
 
-  const background = context.createLinearGradient(0, 0, 1200, 800);
-  background.addColorStop(0, '#173f49');
-  background.addColorStop(0.5, '#0f2926');
-  background.addColorStop(1, '#3a2713');
+  if (!context) {
+    throw new Error(
+      'Canvas rendering is unavailable.',
+    );
+  }
+
+  const background =
+    context.createLinearGradient(
+      0,
+      0,
+      1200,
+      800,
+    );
+
+  background.addColorStop(
+    0,
+    '#173f49',
+  );
+  background.addColorStop(
+    0.5,
+    '#0f2926',
+  );
+  background.addColorStop(
+    1,
+    '#3a2713',
+  );
+
   context.fillStyle = background;
   context.fillRect(0, 0, 1200, 800);
 
   context.globalAlpha = 0.28;
-  for (let index = 0; index < 84; index += 1) {
-    const x = (index * 137) % 1200;
-    const y = (index * 83) % 800;
+
+  for (
+    let index = 0;
+    index < 84;
+    index += 1
+  ) {
+    const x =
+      (index * 137) % 1200;
+
+    const y =
+      (index * 83) % 800;
+
     context.beginPath();
-    context.arc(x, y, index % 5 === 0 ? 2 : 1, 0, Math.PI * 2);
-    context.fillStyle = index % 3 === 0 ? '#f8dc84' : '#b9f4ff';
+    context.arc(
+      x,
+      y,
+      index % 5 === 0 ? 2 : 1,
+      0,
+      Math.PI * 2,
+    );
+
+    context.fillStyle =
+      index % 3 === 0
+        ? '#f8dc84'
+        : '#b9f4ff';
+
     context.fill();
   }
+
   context.globalAlpha = 1;
 
-  roundedRect(context, 72, 64, 1056, 672, 48);
-  const paper = context.createLinearGradient(72, 64, 1128, 736);
-  paper.addColorStop(0, '#fff5d8');
-  paper.addColorStop(0.58, '#f3dfae');
-  paper.addColorStop(1, '#e7c982');
+  roundedRect(
+    context,
+    72,
+    64,
+    1056,
+    672,
+    48,
+  );
+
+  const paper =
+    context.createLinearGradient(
+      72,
+      64,
+      1128,
+      736,
+    );
+
+  paper.addColorStop(
+    0,
+    '#fff5d8',
+  );
+  paper.addColorStop(
+    0.58,
+    '#f3dfae',
+  );
+  paper.addColorStop(
+    1,
+    '#e7c982',
+  );
+
   context.fillStyle = paper;
   context.fill();
+
   context.strokeStyle = '#e5bd5c';
   context.lineWidth = 3;
   context.stroke();
@@ -428,28 +793,45 @@ async function renderPassportPng(payload: PassportSharePayload, fallbackPhoto: s
   context.save();
   context.globalAlpha = 0.055;
   context.fillStyle = '#6b3a20';
-  context.font = '900 170px Georgia, serif';
+  context.font =
+    '900 170px Georgia, serif';
   context.translate(760, 520);
   context.rotate(-0.15);
   context.fillText('POND', 0, 0);
   context.restore();
 
   context.fillStyle = '#7b3f23';
-  context.font = '900 25px Arial, sans-serif';
-  context.fillText('TOBYWORLD POND PASSPORT', 132, 126);
+  context.font =
+    '900 25px Arial, sans-serif';
+  context.fillText(
+    'TOBYWORLD POND PASSPORT',
+    132,
+    126,
+  );
 
   context.fillStyle = '#2f1f15';
   context.font =
     payload.name.length > 25
       ? '900 52px Georgia, serif'
       : '900 66px Georgia, serif';
-  context.fillText(payload.name, 132, 194);
+
+  context.fillText(
+    payload.name,
+    132,
+    194,
+  );
 
   context.fillStyle = '#7b3f23';
-  context.font = '800 25px Arial, sans-serif';
-  context.fillText(payload.handle, 132, 230);
+  context.font =
+    '800 25px Arial, sans-serif';
+  context.fillText(
+    payload.handle,
+    132,
+    230,
+  );
 
-  context.strokeStyle = 'rgba(91,53,26,0.20)';
+  context.strokeStyle =
+    'rgba(91,53,26,0.20)';
   context.lineWidth = 2;
   context.beginPath();
   context.moveTo(132, 260);
@@ -457,18 +839,35 @@ async function renderPassportPng(payload: PassportSharePayload, fallbackPhoto: s
   context.stroke();
 
   context.fillStyle = '#7b3f23';
-  context.font = '900 19px Arial, sans-serif';
-  context.fillText('POND TITLE', 132, 310);
+  context.font =
+    '900 19px Arial, sans-serif';
+  context.fillText(
+    'POND TITLE',
+    132,
+    310,
+  );
 
   context.fillStyle = '#2f1f15';
   context.font =
     payload.title.length > 34
       ? '900 52px Georgia, serif'
       : '900 66px Georgia, serif';
-  const titleLines = drawWrappedText(context, payload.title, 132, 370, 670, 58, 2);
+
+  const titleLines =
+    drawWrappedText(
+      context,
+      payload.title,
+      132,
+      370,
+      670,
+      58,
+      2,
+    );
 
   context.fillStyle = '#3c281b';
-  context.font = '800 25px Arial, sans-serif';
+  context.font =
+    '800 25px Arial, sans-serif';
+
   drawWrappedText(
     context,
     payload.characteristic,
@@ -486,61 +885,135 @@ async function renderPassportPng(payload: PassportSharePayload, fallbackPhoto: s
     ['ASSETS', payload.assets],
   ] as const;
 
-  stats.forEach(([label, value], index) => {
-    const x = 132 + index * 166;
-    roundedRect(context, x, 624, 148, 78, 17);
-    context.fillStyle = 'rgba(255,248,230,0.54)';
-    context.fill();
-    context.strokeStyle = 'rgba(91,53,26,0.16)';
-    context.lineWidth = 1;
-    context.stroke();
+  stats.forEach(
+    ([label, value], index) => {
+      const x =
+        132 + index * 166;
 
-    context.fillStyle = '#2f1f15';
-    context.font = '900 28px Arial, sans-serif';
-    context.fillText(value, x + 18, 656);
-    context.fillStyle = '#7b3f23';
-    context.font = '900 13px Arial, sans-serif';
-    context.fillText(label, x + 18, 684);
-  });
+      roundedRect(
+        context,
+        x,
+        624,
+        148,
+        78,
+        17,
+      );
 
-  context.strokeStyle = 'rgba(91,53,26,0.16)';
+      context.fillStyle =
+        'rgba(255,248,230,0.54)';
+      context.fill();
+
+      context.strokeStyle =
+        'rgba(91,53,26,0.16)';
+      context.lineWidth = 1;
+      context.stroke();
+
+      context.fillStyle = '#2f1f15';
+      context.font =
+        '900 28px Arial, sans-serif';
+      context.fillText(
+        value,
+        x + 18,
+        656,
+      );
+
+      context.fillStyle = '#7b3f23';
+      context.font =
+        '900 13px Arial, sans-serif';
+      context.fillText(
+        label,
+        x + 18,
+        684,
+      );
+    },
+  );
+
+  context.strokeStyle =
+    'rgba(91,53,26,0.16)';
   context.lineWidth = 2;
   context.beginPath();
   context.moveTo(844, 94);
   context.lineTo(844, 704);
   context.stroke();
 
-  roundedRect(context, 886, 104, 178, 178, 34);
-  context.fillStyle = 'rgba(255,248,230,0.48)';
+  roundedRect(
+    context,
+    886,
+    104,
+    178,
+    178,
+    34,
+  );
+
+  context.fillStyle =
+    'rgba(255,248,230,0.48)';
   context.fill();
+
   context.lineWidth = 4;
-  context.strokeStyle = 'rgba(91,53,26,0.34)';
+  context.strokeStyle =
+    'rgba(91,53,26,0.34)';
   context.stroke();
 
   const photo = await loadFirstImage(
-    [payload.photo, new URL(fallbackPhoto, getPublicOrigin()).toString()].filter(
-      (value): value is string => Boolean(value),
+    [
+      payload.photo,
+      new URL(
+        fallbackPhoto,
+        getPublicOrigin(),
+      ).toString(),
+    ].filter(
+      (
+        value,
+      ): value is string =>
+        Boolean(value),
     ),
   );
 
   if (photo) {
     context.save();
-    roundedRect(context, 894, 112, 162, 162, 28);
+
+    roundedRect(
+      context,
+      894,
+      112,
+      162,
+      162,
+      28,
+    );
+
     context.clip();
 
-    const sourceRatio = photo.naturalWidth / photo.naturalHeight;
+    const sourceRatio =
+      photo.naturalWidth /
+      photo.naturalHeight;
+
     const targetRatio = 1;
+
     let sourceX = 0;
     let sourceY = 0;
-    let sourceWidth = photo.naturalWidth;
-    let sourceHeight = photo.naturalHeight;
+    let sourceWidth =
+      photo.naturalWidth;
+    let sourceHeight =
+      photo.naturalHeight;
 
     if (sourceRatio > targetRatio) {
-      sourceWidth = photo.naturalHeight;
-      sourceX = (photo.naturalWidth - sourceWidth) / 2;
-    } else if (sourceRatio < targetRatio) {
-      sourceHeight = photo.naturalWidth;
-      sourceY = (photo.naturalHeight - sourceHeight) / 2;
+      sourceWidth =
+        photo.naturalHeight;
+
+      sourceX =
+        (photo.naturalWidth -
+          sourceWidth) /
+        2;
+    } else if (
+      sourceRatio < targetRatio
+    ) {
+      sourceHeight =
+        photo.naturalWidth;
+
+      sourceY =
+        (photo.naturalHeight -
+          sourceHeight) /
+        2;
     }
 
     context.drawImage(
@@ -554,187 +1027,462 @@ async function renderPassportPng(payload: PassportSharePayload, fallbackPhoto: s
       162,
       162,
     );
+
     context.restore();
   } else {
     context.textAlign = 'center';
-    context.font = '86px Arial, sans-serif';
+    context.font =
+      '86px Arial, sans-serif';
     context.fillStyle = '#2f1f15';
-    context.fillText('🐸', 975, 220);
+    context.fillText(
+      '🐸',
+      975,
+      220,
+    );
     context.textAlign = 'left';
   }
 
-  roundedRect(context, 876, 320, 198, 112, 55);
-  context.fillStyle = 'rgba(255,248,230,0.34)';
+  roundedRect(
+    context,
+    876,
+    320,
+    198,
+    112,
+    55,
+  );
+
+  context.fillStyle =
+    'rgba(255,248,230,0.34)';
   context.fill();
+
   context.lineWidth = 4;
-  context.strokeStyle = 'rgba(123,63,35,0.48)';
+  context.strokeStyle =
+    'rgba(123,63,35,0.48)';
   context.stroke();
 
   context.textAlign = 'center';
   context.fillStyle = '#2f1f15';
-  context.font = '900 22px Arial, sans-serif';
-  context.fillText(payload.stamp, 975, 362);
+  context.font =
+    '900 22px Arial, sans-serif';
+  context.fillText(
+    payload.stamp,
+    975,
+    362,
+  );
+
   context.fillStyle = '#7b3f23';
-  context.font = '900 15px Arial, sans-serif';
-  context.fillText(payload.mode, 975, 395);
+  context.font =
+    '900 15px Arial, sans-serif';
+  context.fillText(
+    payload.mode,
+    975,
+    395,
+  );
 
   context.textAlign = 'left';
   context.fillStyle = '#7b3f23';
-  context.font = '900 15px Arial, sans-serif';
-  context.fillText('CURRENT MARK', 886, 488);
+  context.font =
+    '900 15px Arial, sans-serif';
+  context.fillText(
+    'CURRENT MARK',
+    886,
+    488,
+  );
+
   context.fillStyle = '#2f1f15';
-  context.font = '900 31px Georgia, serif';
-  drawWrappedText(context, payload.mark, 886, 532, 190, 36, 2);
+  context.font =
+    '900 31px Georgia, serif';
+
+  drawWrappedText(
+    context,
+    payload.mark,
+    886,
+    532,
+    190,
+    36,
+    2,
+  );
 
   context.fillStyle = '#7b3f23';
-  context.font = '800 18px Georgia, serif';
+  context.font =
+    '800 18px Georgia, serif';
   context.textAlign = 'center';
-  context.fillText('We move not by leaps.', 975, 654);
-  context.fillText('We move by stillness.', 975, 680);
+  context.fillText(
+    'We move not by leaps.',
+    975,
+    654,
+  );
+  context.fillText(
+    'We move by stillness.',
+    975,
+    680,
+  );
   context.textAlign = 'left';
 
-  return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error('PNG creation failed.'))),
-      'image/png',
-      0.96,
-    );
-  });
+  return await new Promise<Blob>(
+    (resolve, reject) => {
+      canvas.toBlob(
+        (blob) =>
+          blob
+            ? resolve(blob)
+            : reject(
+                new Error(
+                  'PNG creation failed.',
+                ),
+              ),
+        'image/png',
+        0.96,
+      );
+    },
+  );
 }
 
 function blobToDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () =>
-      typeof reader.result === 'string'
-        ? resolve(reader.result)
-        : reject(new Error('Image encoding failed.'));
-    reader.onerror = () => reject(reader.error ?? new Error('Image reading failed.'));
-    reader.readAsDataURL(blob);
-  });
+  return new Promise<string>(
+    (resolve, reject) => {
+      const reader =
+        new FileReader();
+
+      reader.onload = () =>
+        typeof reader.result ===
+        'string'
+          ? resolve(reader.result)
+          : reject(
+              new Error(
+                'Image encoding failed.',
+              ),
+            );
+
+      reader.onerror = () =>
+        reject(
+          reader.error ??
+            new Error(
+              'Image reading failed.',
+            ),
+        );
+
+      reader.readAsDataURL(blob);
+    },
+  );
 }
 
 async function copyText(value: string) {
   try {
-    await navigator.clipboard.writeText(value);
+    await navigator.clipboard.writeText(
+      value,
+    );
+
     return true;
   } catch {
     return false;
   }
 }
 
-async function openExternalUrl(url: string) {
-  const action = (sdk as PassportSdk).actions?.openUrl;
+async function openExternalUrl(
+  url: string,
+) {
+  const action =
+    (sdk as PassportSdk).actions
+      ?.openUrl;
 
   if (action) {
-    await Promise.resolve(action(url));
+    await Promise.resolve(
+      action(url),
+    );
+
     return;
   }
 
-  window.open(url, '_blank', 'noopener,noreferrer');
+  window.open(
+    url,
+    '_blank',
+    'noopener,noreferrer',
+  );
 }
 
 export function TobyworldPondPassport() {
-  const [data, setData] = useState<PassportResponse | null>(null);
-  const [contextUser, setContextUser] = useState<MiniAppUserContext | null>(null);
-  const [isMiniApp, setIsMiniApp] = useState(false);
-  const [heldAssets, setHeldAssets] = useState<TobyworldAsset[]>([]);
-  const [isCheckingAssets, setIsCheckingAssets] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRerolling, setIsRerolling] = useState(false);
-  const [isSupporting, setIsSupporting] = useState(false);
-  const [isCreatingShare, setIsCreatingShare] = useState(false);
-  const [isCreatingImage, setIsCreatingImage] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [freshInkKey, setFreshInkKey] = useState(0);
-  const [pfpFailed, setPfpFailed] = useState(false);
+  const [data, setData] =
+    useState<PassportResponse | null>(
+      null,
+    );
 
-  const { address, isConnected } = useAccount();
-  const { connectors, connectAsync, isPending: isConnecting } = useConnect();
-  const { disconnect } = useDisconnect();
-  const { signMessageAsync, isPending: isSigning } = useSignMessage();
-  const publicClient = usePublicClient({ chainId: BASE_CHAIN_ID });
+  const [
+    contextUser,
+    setContextUser,
+  ] =
+    useState<MiniAppUserContext | null>(
+      null,
+    );
+
+  const [
+    isMiniApp,
+    setIsMiniApp,
+  ] = useState(false);
+
+  const [
+    heldAssets,
+    setHeldAssets,
+  ] = useState<TobyworldAsset[]>([]);
+
+  const [
+    isCheckingAssets,
+    setIsCheckingAssets,
+  ] = useState(false);
+
+  const [isLoading, setIsLoading] =
+    useState(false);
+
+  const [
+    isRerolling,
+    setIsRerolling,
+  ] = useState(false);
+
+  const [
+    isSupporting,
+    setIsSupporting,
+  ] = useState(false);
+
+  const [
+    isCreatingShare,
+    setIsCreatingShare,
+  ] = useState(false);
+
+  const [
+    isCreatingImage,
+    setIsCreatingImage,
+  ] = useState(false);
+
+  const [notice, setNotice] =
+    useState<string | null>(null);
+
+  const [
+    freshInkKey,
+    setFreshInkKey,
+  ] = useState(0);
+
+  const [
+    pfpFailed,
+    setPfpFailed,
+  ] = useState(false);
+
+  const {
+    address,
+    isConnected,
+  } = useAccount();
+
+  const {
+    connectors,
+    connectAsync,
+    isPending: isConnecting,
+  } = useConnect();
+
+  const { disconnect } =
+    useDisconnect();
+
+  const {
+    signMessageAsync,
+    isPending: isSigning,
+  } = useSignMessage();
+
+  const publicClient =
+    usePublicClient({
+      chainId: BASE_CHAIN_ID,
+    });
 
   const persona = data?.persona;
   const snapshot = data?.snapshot;
-  const canUseFarcasterPassport = Boolean(contextUser?.fid && getQuickAuthFetch());
-  const isFarcasterSession = Boolean(isMiniApp || contextUser?.fid);
-  const assetCount = heldAssets.length;
-  const hasEnoughAssets = assetCount >= REQUIRED_ASSET_COUNT;
-  const fallbackFrogImage = pickBackupFrogImage(snapshot?.fid || address);
-  const pfpUrl = !pfpFailed ? contextUser?.pfpUrl : undefined;
-  const photoSrc = pfpUrl || fallbackFrogImage;
-  const castPhotoSrc = getPassportPhotoUrl(pfpUrl, fallbackFrogImage);
-  const renderedMark = snapshot?.currentMark ?? 'Unstamped Frog';
+
+  const canUseFarcasterPassport =
+    Boolean(
+      contextUser?.fid &&
+        getQuickAuthFetch(),
+    );
+
+  const isFarcasterSession =
+    Boolean(
+      isMiniApp ||
+        contextUser?.fid,
+    );
+
+  const assetCount =
+    heldAssets.length;
+
+  const hasEnoughAssets =
+    assetCount >=
+    REQUIRED_ASSET_COUNT;
+
+  const fallbackFrogImage =
+    pickBackupFrogImage(
+      snapshot?.fid || address,
+    );
+
+  const pfpUrl = !pfpFailed
+    ? contextUser?.pfpUrl
+    : undefined;
+
+  const photoSrc =
+    pfpUrl ||
+    fallbackFrogImage;
+
+  const castPhotoSrc =
+    getPassportPhotoUrl(
+      pfpUrl,
+      fallbackFrogImage,
+    );
+
+  const renderedMark =
+    snapshot?.currentMark ??
+    'Unstamped Frog';
 
   const stats = useMemo(
     () => [
-      { label: 'Streak', value: `${formatNumber(snapshot?.streakCount)}d` },
-      { label: 'Best', value: `${formatNumber(snapshot?.bestStreak)}d` },
-      { label: 'Rites', value: formatNumber(snapshot?.totalCompletions) },
-      { label: 'Power', value: `${formatNumber(snapshot?.currentEchoPower)}x` },
+      {
+        label: 'Streak',
+        value:
+          `${formatNumber(
+            snapshot?.streakCount,
+          )}d`,
+      },
+      {
+        label: 'Best',
+        value:
+          `${formatNumber(
+            snapshot?.bestStreak,
+          )}d`,
+      },
+      {
+        label: 'Rites',
+        value: formatNumber(
+          snapshot?.totalCompletions,
+        ),
+      },
+      {
+        label: 'Power',
+        value:
+          `${formatNumber(
+            snapshot?.currentEchoPower,
+          )}x`,
+      },
     ],
     [snapshot],
   );
 
-  const visibleConnectors = useMemo(() => {
-    const seen = new Set<string>();
+  const visibleConnectors =
+    useMemo(() => {
+      const seen =
+        new Set<string>();
 
-    return connectors.filter((connector) => {
-      const label = connectorLabel(connector);
-      if (seen.has(label)) return false;
-      seen.add(label);
-      return true;
-    });
-  }, [connectors]);
+      return connectors.filter(
+        (connector) => {
+          const label =
+            connectorLabel(
+              connector,
+            );
 
-  const checkWalletAssets = useCallback(async () => {
-    if (!isConnected || !address || !publicClient) {
-      setHeldAssets([]);
-      return;
-    }
+          if (seen.has(label)) {
+            return false;
+          }
 
-    setIsCheckingAssets(true);
-
-    try {
-      const results = await Promise.allSettled(
-        TOBYWORLD_SWAP_TOKENS.map(async (token) => ({
-          token,
-          balance: await publicClient.readContract({
-            address: token.address,
-            abi: ERC20_BALANCE_ABI,
-            functionName: 'balanceOf',
-            args: [address],
-          }),
-        })),
+          seen.add(label);
+          return true;
+        },
       );
+    }, [connectors]);
 
-      setHeldAssets(
-        results
-          .map((result) => {
-            if (result.status !== 'fulfilled') return null;
-            return toBigIntBalance(result.value.balance) > BigInt(0)
-              ? result.value.token
-              : null;
-          })
-          .filter((token): token is TobyworldAsset => token !== null),
-      );
-    } finally {
-      setIsCheckingAssets(false);
-    }
-  }, [address, isConnected, publicClient]);
+  const checkWalletAssets =
+    useCallback(async () => {
+      if (
+        !isConnected ||
+        !address ||
+        !publicClient
+      ) {
+        setHeldAssets([]);
+        return;
+      }
+
+      setIsCheckingAssets(true);
+
+      try {
+        const results =
+          await Promise.allSettled(
+            TOBYWORLD_SWAP_TOKENS.map(
+              async (token) => ({
+                token,
+                balance:
+                  await publicClient.readContract(
+                    {
+                      address:
+                        token.address,
+                      abi: ERC20_BALANCE_ABI,
+                      functionName:
+                        'balanceOf',
+                      args: [address],
+                    },
+                  ),
+              }),
+            ),
+          );
+
+        setHeldAssets(
+          results
+            .map((result) => {
+              if (
+                result.status !==
+                'fulfilled'
+              ) {
+                return null;
+              }
+
+              return toBigIntBalance(
+                result.value.balance,
+              ) > BigInt(0)
+                ? result.value.token
+                : null;
+            })
+            .filter(
+              (
+                token,
+              ): token is TobyworldAsset =>
+                token !== null,
+            ),
+        );
+      } finally {
+        setIsCheckingAssets(false);
+      }
+    }, [
+      address,
+      isConnected,
+      publicClient,
+    ]);
 
   useEffect(() => {
     void (async () => {
       try {
-        const passportSdk = sdk as PassportSdk;
-        const inside = passportSdk.isInMiniApp
-          ? await Promise.resolve(passportSdk.isInMiniApp())
-          : false;
-        const context = await Promise.resolve(passportSdk.context);
+        const passportSdk =
+          sdk as PassportSdk;
 
-        setIsMiniApp(Boolean(inside || context?.user));
-        setContextUser(context?.user ?? null);
+        const inside =
+          passportSdk.isInMiniApp
+            ? await Promise.resolve(
+                passportSdk.isInMiniApp(),
+              )
+            : false;
+
+        const context =
+          await Promise.resolve(
+            passportSdk.context,
+          );
+
+        setIsMiniApp(
+          Boolean(
+            inside ||
+              context?.user,
+          ),
+        );
+
+        setContextUser(
+          context?.user ?? null,
+        );
       } catch {
         setIsMiniApp(false);
         setContextUser(null);
@@ -745,82 +1493,198 @@ export function TobyworldPondPassport() {
   useEffect(() => {
     void checkWalletAssets();
 
-    if (!isConnected || !address) return undefined;
+    if (
+      !isConnected ||
+      !address
+    ) {
+      return undefined;
+    }
 
-    const interval = window.setInterval(() => {
-      void checkWalletAssets();
-    }, 30_000);
+    const interval =
+      window.setInterval(() => {
+        void checkWalletAssets();
+      }, 30_000);
 
-    return () => window.clearInterval(interval);
-  }, [address, checkWalletAssets, isConnected]);
+    return () =>
+      window.clearInterval(
+        interval,
+      );
+  }, [
+    address,
+    checkWalletAssets,
+    isConnected,
+  ]);
 
-  const connectWallet = useCallback(
-    async (connector?: Connector) => {
-      const selected =
-        connector ??
-        (isFarcasterSession
-          ? connectors.find((item) => /farcaster/i.test(item.name))
-          : connectors.find((item) => /base|coinbase/i.test(item.name))) ??
-        connectors.find((item) => /walletconnect/i.test(item.name)) ??
-        connectors.find((item) => /injected/i.test(item.name)) ??
-        connectors[0];
+  const connectWallet =
+    useCallback(
+      async (
+        connector?: Connector,
+      ) => {
+        const selected =
+          connector ??
+          (isFarcasterSession
+            ? connectors.find(
+                (item) =>
+                  /farcaster/i.test(
+                    item.name,
+                  ),
+              )
+            : connectors.find(
+                (item) =>
+                  /base|coinbase/i.test(
+                    item.name,
+                  ),
+              )) ??
+          connectors.find((item) =>
+            /walletconnect/i.test(
+              item.name,
+            ),
+          ) ??
+          connectors.find((item) =>
+            /injected/i.test(
+              item.name,
+            ),
+          ) ??
+          connectors[0];
 
-      if (!selected) {
-        setNotice('No wallet connector is available in this browser.');
-        return;
-      }
+        if (!selected) {
+          setNotice(
+            'No wallet connector is available in this browser.',
+          );
 
-      try {
-        setNotice(null);
-        await connectAsync({ connector: selected });
-        setNotice('Wallet connected. Checking Tobyworld assets…');
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : 'Wallet connection failed.');
-      }
-    },
-    [connectAsync, connectors, isFarcasterSession],
-  );
-
-  const fetchPassport = useCallback(
-    async (reroll = false) => {
-      const authFetch = getQuickAuthFetch();
-
-      if (!authFetch || !contextUser?.fid) return;
-      if (!isConnected || !address || !hasEnoughAssets) return;
-
-      reroll ? setIsRerolling(true) : setIsLoading(true);
-      setNotice(null);
-
-      try {
-        const response = await authFetch(`${getPublicOrigin()}/api/tobyworld/pond-passport`, {
-          method: reroll ? 'POST' : 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          cache: 'no-store',
-        });
-
-        const nextData = (await response.json()) as PassportResponse;
-
-        if (!response.ok) {
-          throw new Error(nextData.error || 'Passport load failed.');
+          return;
         }
 
-        setData(nextData);
-        setFreshInkKey((value) => value + 1);
-        setNotice(reroll ? 'New stamp loaded.' : 'Passport activity refreshed.');
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : 'Passport load failed.');
-      } finally {
-        setIsLoading(false);
-        setIsRerolling(false);
-      }
-    },
-    [address, contextUser?.fid, hasEnoughAssets, isConnected],
-  );
+        try {
+          setNotice(null);
+
+          await connectAsync({
+            connector: selected,
+          });
+
+          setNotice(
+            'Wallet connected. Checking Tobyworld assets…',
+          );
+        } catch (error) {
+          setNotice(
+            error instanceof Error
+              ? error.message
+              : 'Wallet connection failed.',
+          );
+        }
+      },
+      [
+        connectAsync,
+        connectors,
+        isFarcasterSession,
+      ],
+    );
+
+  const fetchPassport =
+    useCallback(
+      async (reroll = false) => {
+        const authFetch =
+          getQuickAuthFetch();
+
+        if (
+          !authFetch ||
+          !contextUser?.fid
+        ) {
+          return;
+        }
+
+        if (
+          !isConnected ||
+          !address ||
+          !hasEnoughAssets
+        ) {
+          return;
+        }
+
+        reroll
+          ? setIsRerolling(true)
+          : setIsLoading(true);
+
+        setNotice(null);
+
+        try {
+          const response =
+            await authFetch(
+              `${getPublicOrigin()}/api/tobyworld/pond-passport`,
+              {
+                method: reroll
+                  ? 'POST'
+                  : 'GET',
+                headers: {
+                  'Content-Type':
+                    'application/json',
+                },
+                cache: 'no-store',
+              },
+            );
+
+          const nextData =
+            (await response.json()) as PassportResponse;
+
+          if (!response.ok) {
+            throw new Error(
+              nextData.error ||
+                'Passport load failed.',
+            );
+          }
+
+          setData(nextData);
+
+          revealPassportPatchUnlocks(
+            nextData.unlockedPatches,
+          );
+
+          setFreshInkKey(
+            (value) => value + 1,
+          );
+
+          setNotice(
+            reroll
+              ? 'New stamp loaded.'
+              : 'Passport activity refreshed.',
+          );
+        } catch (error) {
+          setNotice(
+            error instanceof Error
+              ? error.message
+              : 'Passport load failed.',
+          );
+        } finally {
+          setIsLoading(false);
+          setIsRerolling(false);
+        }
+      },
+      [
+        address,
+        contextUser?.fid,
+        hasEnoughAssets,
+        isConnected,
+      ],
+    );
 
   useEffect(() => {
-    if (!canUseFarcasterPassport || !isConnected || !hasEnoughAssets || persona) return;
+    if (
+      !canUseFarcasterPassport ||
+      !isConnected ||
+      !hasEnoughAssets ||
+      persona
+    ) {
+      return;
+    }
+
     void fetchPassport(false);
-  }, [canUseFarcasterPassport, fetchPassport, hasEnoughAssets, isConnected, persona]);
+  }, [
+    canUseFarcasterPassport,
+    fetchPassport,
+    hasEnoughAssets,
+    isConnected,
+    persona,
+  ]);
 
   async function supportWalletPassport() {
     if (!address) {
@@ -829,7 +1693,10 @@ export function TobyworldPondPassport() {
     }
 
     if (!hasEnoughAssets) {
-      setNotice(`This wallet holds ${assetCount}/${REQUIRED_ASSET_COUNT} required assets.`);
+      setNotice(
+        `This wallet holds ${assetCount}/${REQUIRED_ASSET_COUNT} required assets.`,
+      );
+
       return;
     }
 
@@ -837,53 +1704,138 @@ export function TobyworldPondPassport() {
     setNotice(null);
 
     try {
-      const message = buildWalletSupportMessage(address);
-      const signature = await signMessageAsync({ message });
-      const response = await fetch('/api/tobyworld/wallet-support-rite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({ walletAddress: address, message, signature }),
-      });
+      const message =
+        buildWalletSupportMessage(
+          address,
+        );
 
-      const result = (await response.json()) as WalletSupportResponse;
+      const signature =
+        await signMessageAsync({
+          message,
+        });
+
+      const response = await fetch(
+        '/api/tobyworld/wallet-support-rite',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          cache: 'no-store',
+          body: JSON.stringify({
+            walletAddress: address,
+            message,
+            signature,
+          }),
+        },
+      );
+
+      const result =
+        (await response.json()) as WalletSupportResponse;
 
       if (!response.ok) {
-        throw new Error(result.error || 'Wallet passport failed.');
+        throw new Error(
+          result.error ||
+            'Wallet passport failed.',
+        );
       }
 
       setData({
         ok: true,
-        persona: createWalletPersona(address, heldAssets),
-        snapshot: createWalletSnapshot(address),
+        persona: createWalletPersona(
+          address,
+          heldAssets,
+        ),
+        snapshot:
+          createWalletSnapshot(
+            address,
+          ),
         source: 'wallet',
-        generatedOn: getTodayUtcDate(),
-        limits: { rerollsRemaining: 0, cooldownSeconds: 0 },
+        generatedOn:
+          getTodayUtcDate(),
+        limits: {
+          rerollsRemaining: 0,
+          cooldownSeconds: 0,
+        },
       });
-      setFreshInkKey((value) => value + 1);
-      setNotice(result.message || 'Wallet passport stamped.');
+
+      setFreshInkKey(
+        (value) => value + 1,
+      );
+
+      setNotice(
+        result.message ||
+          'Wallet passport stamped.',
+      );
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Wallet passport failed.');
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Wallet passport failed.',
+      );
     } finally {
       setIsSupporting(false);
     }
   }
 
   function buildSharePayload(): PassportSharePayload {
-    if (!persona) throw new Error('No passport is ready.');
+    if (!persona) {
+      throw new Error(
+        'No passport is ready.',
+      );
+    }
 
     return {
-      title: compactText(persona.title, 72),
-      characteristic: compactText(persona.characteristic, 145),
-      name: compactText(getDisplayName(snapshot, contextUser, address), 52),
-      handle: compactText(getHandle(snapshot, contextUser, address), 52),
-      mark: compactText(renderedMark, 42),
-      streak: `${formatNumber(snapshot?.streakCount)}d`,
-      rites: formatNumber(snapshot?.totalCompletions),
-      power: `${formatNumber(snapshot?.currentEchoPower)}x`,
-      assets: `${heldAssets.length}/${TOTAL_ASSET_COUNT}`,
-      stamp: compactText(persona.stamp, 32),
-      mode: data?.source === 'wallet' ? 'WALLET SUPPORTER' : 'APPROVED',
+      title: compactText(
+        persona.title,
+        72,
+      ),
+      characteristic: compactText(
+        persona.characteristic,
+        145,
+      ),
+      name: compactText(
+        getDisplayName(
+          snapshot,
+          contextUser,
+          address,
+        ),
+        52,
+      ),
+      handle: compactText(
+        getHandle(
+          snapshot,
+          contextUser,
+          address,
+        ),
+        52,
+      ),
+      mark: compactText(
+        renderedMark,
+        42,
+      ),
+      streak:
+        `${formatNumber(
+          snapshot?.streakCount,
+        )}d`,
+      rites: formatNumber(
+        snapshot?.totalCompletions,
+      ),
+      power:
+        `${formatNumber(
+          snapshot?.currentEchoPower,
+        )}x`,
+      assets:
+        `${heldAssets.length}/${TOTAL_ASSET_COUNT}`,
+      stamp: compactText(
+        persona.stamp,
+        32,
+      ),
+      mode:
+        data?.source === 'wallet'
+          ? 'WALLET SUPPORTER'
+          : 'APPROVED',
       photo: castPhotoSrc,
     };
   }
@@ -891,8 +1843,17 @@ export function TobyworldPondPassport() {
   function buildCastText() {
     if (!persona) return '';
 
-    const name = getDisplayName(snapshot, contextUser, address);
-    const handle = getHandle(snapshot, contextUser, address);
+    const name = getDisplayName(
+      snapshot,
+      contextUser,
+      address,
+    );
+
+    const handle = getHandle(
+      snapshot,
+      contextUser,
+      address,
+    );
 
     return [
       `${name} received a Tobyworld Pond Passport.`,
@@ -900,7 +1861,9 @@ export function TobyworldPondPassport() {
       `Title: ${persona.title}`,
       `Trait: ${persona.characteristic}`,
       '',
-      `${handle} · ${formatNumber(snapshot?.streakCount)}d streak · ${formatNumber(
+      `${handle} · ${formatNumber(
+        snapshot?.streakCount,
+      )}d streak · ${formatNumber(
         snapshot?.currentEchoPower,
       )}x echo power`,
       '',
@@ -909,20 +1872,47 @@ export function TobyworldPondPassport() {
   }
 
   async function createShare() {
-    const payload = buildSharePayload();
-    const png = await renderPassportPng(payload, fallbackFrogImage);
-    const imageDataUrl = await blobToDataUrl(png);
-    const response = await fetch('/api/tobyworld/passport-share/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
-      body: JSON.stringify({ payload, imageDataUrl }),
-    });
+    const payload =
+      buildSharePayload();
 
-    const result = (await response.json()) as ShareCreateResponse;
+    const png =
+      await renderPassportPng(
+        payload,
+        fallbackFrogImage,
+      );
 
-    if (!response.ok || !result.ok || !result.shareUrl || !result.imageUrl) {
-      throw new Error(result.error || 'Unable to create passport share.');
+    const imageDataUrl =
+      await blobToDataUrl(png);
+
+    const response = await fetch(
+      '/api/tobyworld/passport-share/create',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({
+          payload,
+          imageDataUrl,
+        }),
+      },
+    );
+
+    const result =
+      (await response.json()) as ShareCreateResponse;
+
+    if (
+      !response.ok ||
+      !result.ok ||
+      !result.shareUrl ||
+      !result.imageUrl
+    ) {
+      throw new Error(
+        result.error ||
+          'Unable to create passport share.',
+      );
     }
 
     return {
@@ -936,27 +1926,56 @@ export function TobyworldPondPassport() {
     if (!persona) return;
 
     setIsCreatingShare(true);
-    setNotice('Creating passport image…');
+    setNotice(
+      'Creating passport image…',
+    );
 
     try {
-      const { shareUrl } = await createShare();
-      const composeCast = (sdk as PassportSdk).actions?.composeCast;
+      const { shareUrl } =
+        await createShare();
 
-      if (isFarcasterSession && composeCast) {
+      await recordPassportSharePatch(
+        shareUrl,
+      );
+
+      const composeCast =
+        (sdk as PassportSdk)
+          .actions?.composeCast;
+
+      if (
+        isFarcasterSession &&
+        composeCast
+      ) {
         await Promise.resolve(
           composeCast({
             text: buildCastText(),
             embeds: [shareUrl],
           }),
         );
-        setNotice('Passport cast opened with its image attached.');
+
+        setNotice(
+          'Passport cast opened with its image attached.',
+        );
+
         return;
       }
 
-      const copied = await copyText(`${buildCastText()}\n\n${shareUrl}`);
-      setNotice(copied ? 'Passport share copied.' : 'Passport share created.');
+      const copied =
+        await copyText(
+          `${buildCastText()}\n\n${shareUrl}`,
+        );
+
+      setNotice(
+        copied
+          ? 'Passport share copied.'
+          : 'Passport share created.',
+      );
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Unable to share passport.');
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Unable to share passport.',
+      );
     } finally {
       setIsCreatingShare(false);
     }
@@ -966,16 +1985,41 @@ export function TobyworldPondPassport() {
     if (!persona) return;
 
     setIsCreatingShare(true);
-    setNotice('Creating passport image…');
+    setNotice(
+      'Creating passport image…',
+    );
 
     try {
-      const { shareUrl } = await createShare();
-      const intent = new URL('https://twitter.com/intent/tweet');
-      intent.searchParams.set('text', buildCastText());
-      intent.searchParams.set('url', shareUrl);
-      await openExternalUrl(intent.toString());
+      const { shareUrl } =
+        await createShare();
+
+      await recordPassportSharePatch(
+        shareUrl,
+      );
+
+      const intent = new URL(
+        'https://twitter.com/intent/tweet',
+      );
+
+      intent.searchParams.set(
+        'text',
+        buildCastText(),
+      );
+
+      intent.searchParams.set(
+        'url',
+        shareUrl,
+      );
+
+      await openExternalUrl(
+        intent.toString(),
+      );
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Unable to share passport.');
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Unable to share passport.',
+      );
     } finally {
       setIsCreatingShare(false);
     }
@@ -985,39 +2029,90 @@ export function TobyworldPondPassport() {
     if (!persona) return;
 
     setIsCreatingImage(true);
-    setNotice('Drawing passport image…');
+    setNotice(
+      'Drawing passport image…',
+    );
 
     try {
-      const png = await renderPassportPng(buildSharePayload(), fallbackFrogImage);
-      const file = new File([png], 'tobyworld-pond-passport.png', {
-        type: 'image/png',
-      });
-      const shareNavigator = navigator as FileShareNavigator;
+      const png =
+        await renderPassportPng(
+          buildSharePayload(),
+          fallbackFrogImage,
+        );
 
-      if (shareNavigator.canShare?.({ files: [file] }) && shareNavigator.share) {
+      const file = new File(
+        [png],
+        'tobyworld-pond-passport.png',
+        {
+          type: 'image/png',
+        },
+      );
+
+      const shareNavigator =
+        navigator as FileShareNavigator;
+
+      if (
+        shareNavigator.canShare?.({
+          files: [file],
+        }) &&
+        shareNavigator.share
+      ) {
         await shareNavigator.share({
-          title: 'Tobyworld Pond Passport',
+          title:
+            'Tobyworld Pond Passport',
           text: buildCastText(),
           files: [file],
         });
-        setNotice('Image share sheet opened.');
+
+        setNotice(
+          'Image share sheet opened.',
+        );
+
         return;
       }
 
-      const objectUrl = URL.createObjectURL(png);
-      const link = document.createElement('a');
+      const objectUrl =
+        URL.createObjectURL(png);
+
+      const link =
+        document.createElement('a');
+
       link.href = objectUrl;
-      link.download = 'tobyworld-pond-passport.png';
-      document.body.appendChild(link);
+      link.download =
+        'tobyworld-pond-passport.png';
+
+      document.body.appendChild(
+        link,
+      );
+
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
-      setNotice('Passport PNG downloaded.');
+
+      window.setTimeout(
+        () =>
+          URL.revokeObjectURL(
+            objectUrl,
+          ),
+        10_000,
+      );
+
+      setNotice(
+        'Passport PNG downloaded.',
+      );
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        setNotice('Image share cancelled.');
+      if (
+        error instanceof DOMException &&
+        error.name === 'AbortError'
+      ) {
+        setNotice(
+          'Image share cancelled.',
+        );
       } else {
-        setNotice(error instanceof Error ? error.message : 'Unable to save image.');
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : 'Unable to save image.',
+        );
       }
     } finally {
       setIsCreatingImage(false);
@@ -1028,14 +2123,34 @@ export function TobyworldPondPassport() {
     if (!persona) return;
 
     setIsCreatingShare(true);
-    setNotice('Creating passport image…');
+    setNotice(
+      'Creating passport image…',
+    );
 
     try {
-      const { shareUrl } = await createShare();
-      const copied = await copyText(`${buildCastText()}\n\n${shareUrl}`);
-      setNotice(copied ? 'Passport and image link copied.' : 'Copy failed.');
+      const { shareUrl } =
+        await createShare();
+
+      await recordPassportSharePatch(
+        shareUrl,
+      );
+
+      const copied =
+        await copyText(
+          `${buildCastText()}\n\n${shareUrl}`,
+        );
+
+      setNotice(
+        copied
+          ? 'Passport and image link copied.'
+          : 'Copy failed.',
+      );
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Unable to copy passport.');
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Unable to copy passport.',
+      );
     } finally {
       setIsCreatingShare(false);
     }
@@ -1056,8 +2171,14 @@ export function TobyworldPondPassport() {
               : 'Ready for pond stamp';
 
   return (
-    <section className="pond-passport" aria-label="Tobyworld Pond Passport">
-      <div className="pond-passport-glow" aria-hidden="true" />
+    <section
+      className="pond-passport"
+      aria-label="Tobyworld Pond Passport"
+    >
+      <div
+        className="pond-passport-glow"
+        aria-hidden="true"
+      />
 
       <div className="pond-passport-toolbar">
         <div>
@@ -1073,84 +2194,158 @@ export function TobyworldPondPassport() {
                 ? 'Pond stamp'
                 : 'Not loaded'}
           </strong>
-          <small>{data?.generatedOn ?? 'Pending'}</small>
+
+          <small>
+            {data?.generatedOn ??
+              'Pending'}
+          </small>
         </div>
       </div>
 
       {!isConnected && (
         <div className="pond-passport-gate">
-          <strong>The passport desk is open.</strong>
+          <strong>
+            The passport desk is open.
+          </strong>
+
           <p>
-            Connect any supported wallet. A wallet holding any two Tobyworld assets can
-            stamp a passport.
+            Connect any supported wallet. A
+            wallet holding any two Tobyworld
+            assets can stamp a passport.
           </p>
 
           <div className="pond-passport-connector-grid">
-            {visibleConnectors.map((connector) => (
-              <button
-                type="button"
-                key={connector.uid}
-                onClick={() => void connectWallet(connector)}
-                disabled={isConnecting}
-              >
-                {isConnecting ? 'Opening…' : connectorLabel(connector)}
-              </button>
-            ))}
+            {visibleConnectors.map(
+              (connector) => (
+                <button
+                  type="button"
+                  key={connector.uid}
+                  onClick={() =>
+                    void connectWallet(
+                      connector,
+                    )
+                  }
+                  disabled={
+                    isConnecting
+                  }
+                >
+                  {isConnecting
+                    ? 'Opening…'
+                    : connectorLabel(
+                        connector,
+                      )}
+                </button>
+              ),
+            )}
           </div>
         </div>
       )}
 
-      {isConnected && !hasEnoughAssets && !isCheckingAssets && (
-        <div className="pond-passport-gate">
-          <strong>Two-asset gate.</strong>
-          <p>
-            This wallet holds {assetCount}/{REQUIRED_ASSET_COUNT} required assets.
-          </p>
+      {isConnected &&
+        !hasEnoughAssets &&
+        !isCheckingAssets && (
+          <div className="pond-passport-gate">
+            <strong>
+              Two-asset gate.
+            </strong>
 
-          <div className="pond-passport-asset-pills">
-            {TOBYWORLD_SWAP_TOKENS.map((token) => {
-              const held = heldAssets.some((item) => item.id === token.id);
+            <p>
+              This wallet holds{' '}
+              {assetCount}/
+              {REQUIRED_ASSET_COUNT}{' '}
+              required assets.
+            </p>
 
-              return (
-                <span className={held ? 'is-held' : ''} key={token.id}>
-                  {held ? '✓ ' : ''}
-                  {token.symbol}
-                </span>
-              );
-            })}
+            <div className="pond-passport-asset-pills">
+              {TOBYWORLD_SWAP_TOKENS.map(
+                (token) => {
+                  const held =
+                    heldAssets.some(
+                      (item) =>
+                        item.id ===
+                        token.id,
+                    );
+
+                  return (
+                    <span
+                      className={
+                        held
+                          ? 'is-held'
+                          : ''
+                      }
+                      key={token.id}
+                    >
+                      {held
+                        ? '✓ '
+                        : ''}
+                      {token.symbol}
+                    </span>
+                  );
+                },
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="ghost"
+              onClick={() =>
+                disconnect()
+              }
+            >
+              Disconnect
+            </button>
           </div>
+        )}
 
-          <button type="button" className="ghost" onClick={() => disconnect()}>
-            Disconnect
-          </button>
-        </div>
-      )}
+      {isConnected &&
+        hasEnoughAssets &&
+        !persona &&
+        !canUseFarcasterPassport && (
+          <div className="pond-passport-gate">
+            <strong>
+              Wallet supporter mode.
+            </strong>
 
-      {isConnected && hasEnoughAssets && !persona && !canUseFarcasterPassport && (
-        <div className="pond-passport-gate">
-          <strong>Wallet supporter mode.</strong>
-          <p>
-            Sign one free message to verify the wallet and stamp its passport. No gas or
-            token approval.
-          </p>
+            <p>
+              Sign one free message to verify the
+              wallet and stamp its passport. No gas
+              or token approval.
+            </p>
 
-          <button
-            type="button"
-            onClick={() => void supportWalletPassport()}
-            disabled={isSupporting || isSigning}
-          >
-            {isSupporting || isSigning ? 'Signing…' : 'Stamp Wallet Passport'}
-          </button>
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={() =>
+                void supportWalletPassport()
+              }
+              disabled={
+                isSupporting ||
+                isSigning
+              }
+            >
+              {isSupporting ||
+              isSigning
+                ? 'Signing…'
+                : 'Stamp Wallet Passport'}
+            </button>
+          </div>
+        )}
 
       <article
-        className={`pond-passport-card ${persona ? 'is-ready' : 'is-pending'} ${
-          !hasEnoughAssets ? 'is-locked' : ''
+        className={`pond-passport-card ${
+          persona
+            ? 'is-ready'
+            : 'is-pending'
+        } ${
+          !hasEnoughAssets
+            ? 'is-locked'
+            : ''
         }`}
         key={freshInkKey}
       >
-        <div className="pond-passport-watermark" aria-hidden="true">
+        <div
+          className="pond-passport-watermark"
+          aria-hidden="true"
+        >
           POND
         </div>
 
@@ -1160,30 +2355,60 @@ export function TobyworldPondPassport() {
               src={photoSrc}
               alt=""
               aria-hidden="true"
-              onError={() => setPfpFailed(true)}
+              onError={() =>
+                setPfpFailed(
+                  true,
+                )
+              }
             />
           </div>
 
           <div className="pond-passport-identity">
-            <small>ISSUED TO</small>
-            <h3>{getDisplayName(snapshot, contextUser, address)}</h3>
+            <small>
+              ISSUED TO
+            </small>
+
+            <h3>
+              {getDisplayName(
+                snapshot,
+                contextUser,
+                address,
+              )}
+            </h3>
+
             <p>
-              {getHandle(snapshot, contextUser, address)}
-              {snapshot?.fid ? ` · FID ${snapshot.fid}` : ''}
+              {getHandle(
+                snapshot,
+                contextUser,
+                address,
+              )}
+
+              {snapshot?.fid
+                ? ` · FID ${snapshot.fid}`
+                : ''}
             </p>
           </div>
 
-          <div className="pond-passport-mini-stamp" aria-hidden="true">
+          <div
+            className="pond-passport-mini-stamp"
+            aria-hidden="true"
+          >
             △🐸🍃
           </div>
         </div>
 
         <div className="pond-passport-title-block">
-          <small>POND TITLE</small>
+          <small>
+            POND TITLE
+          </small>
+
           <h2>
             {persona?.title ??
-              (hasEnoughAssets ? 'Awaiting pond stamp…' : 'Passport locked')}
+              (hasEnoughAssets
+                ? 'Awaiting pond stamp…'
+                : 'Passport locked')}
           </h2>
+
           <p>
             {persona?.characteristic ??
               (hasEnoughAssets
@@ -1195,19 +2420,32 @@ export function TobyworldPondPassport() {
         <div className="pond-passport-trait-grid">
           <div>
             <small>HABIT</small>
-            <p>{persona?.strangeHabit ?? 'Pending.'}</p>
+            <p>
+              {persona?.strangeHabit ??
+                'Pending.'}
+            </p>
           </div>
+
           <div>
-            <small>WARNING</small>
-            <p>{persona?.pondWarning ?? 'Pending.'}</p>
+            <small>
+              WARNING
+            </small>
+            <p>
+              {persona?.pondWarning ??
+                'Pending.'}
+            </p>
           </div>
         </div>
 
         <div className="pond-passport-stat-row">
           {stats.map((stat) => (
             <div key={stat.label}>
-              <strong>{stat.value}</strong>
-              <span>{stat.label}</span>
+              <strong>
+                {stat.value}
+              </strong>
+              <span>
+                {stat.label}
+              </span>
             </div>
           ))}
         </div>
@@ -1215,67 +2453,123 @@ export function TobyworldPondPassport() {
         <div className="pond-passport-bottom-row">
           <div>
             <small>MARK</small>
-            <strong>{renderedMark}</strong>
+            <strong>
+              {renderedMark}
+            </strong>
           </div>
 
           <div className="pond-passport-approved">
-            <span>{persona?.stamp ?? '△ · 🐸 · 🍃'}</span>
-            <b>{hasEnoughAssets ? 'APPROVED' : 'LOCKED'}</b>
+            <span>
+              {persona?.stamp ??
+                '△ · 🐸 · 🍃'}
+            </span>
+
+            <b>
+              {hasEnoughAssets
+                ? 'APPROVED'
+                : 'LOCKED'}
+            </b>
           </div>
         </div>
       </article>
 
       <div className="pond-passport-actions">
-        {isConnected && canUseFarcasterPassport && (
-          <button
-            type="button"
-            className="primary"
-            onClick={() => void fetchPassport(true)}
-            disabled={
-              isRerolling ||
-              isLoading ||
-              !persona ||
-              (data?.limits?.rerollsRemaining ?? 0) <= 0
-            }
-          >
-            {isRerolling ? 'Rerolling…' : 'Reroll'}
-          </button>
-        )}
+        {isConnected &&
+          canUseFarcasterPassport && (
+            <button
+              type="button"
+              className="primary"
+              onClick={() =>
+                void fetchPassport(
+                  true,
+                )
+              }
+              disabled={
+                isRerolling ||
+                isLoading ||
+                !persona ||
+                (data?.limits
+                  ?.rerollsRemaining ??
+                  0) <= 0
+              }
+            >
+              {isRerolling
+                ? 'Rerolling…'
+                : 'Reroll'}
+            </button>
+          )}
 
-        {isConnected && canUseFarcasterPassport && (
-          <button
-            type="button"
-            onClick={() => void fetchPassport(false)}
-            disabled={isLoading || isRerolling || !hasEnoughAssets}
-          >
-            {isLoading ? 'Refreshing…' : 'Refresh Stats'}
-          </button>
-        )}
+        {isConnected &&
+          canUseFarcasterPassport && (
+            <button
+              type="button"
+              onClick={() =>
+                void fetchPassport(
+                  false,
+                )
+              }
+              disabled={
+                isLoading ||
+                isRerolling ||
+                !hasEnoughAssets
+              }
+            >
+              {isLoading
+                ? 'Refreshing…'
+                : 'Refresh Stats'}
+            </button>
+          )}
 
-        {isConnected && !canUseFarcasterPassport && (
-          <button
-            type="button"
-            className="primary"
-            onClick={() => void supportWalletPassport()}
-            disabled={!hasEnoughAssets || isSupporting || isSigning}
-          >
-            {isSupporting || isSigning ? 'Signing…' : persona ? 'Restamp' : 'Stamp'}
-          </button>
-        )}
+        {isConnected &&
+          !canUseFarcasterPassport && (
+            <button
+              type="button"
+              className="primary"
+              onClick={() =>
+                void supportWalletPassport()
+              }
+              disabled={
+                !hasEnoughAssets ||
+                isSupporting ||
+                isSigning
+              }
+            >
+              {isSupporting ||
+              isSigning
+                ? 'Signing…'
+                : persona
+                  ? 'Restamp'
+                  : 'Stamp'}
+            </button>
+          )}
 
         <button
           type="button"
-          onClick={() => void sharePassport()}
-          disabled={!persona || isCreatingShare}
+          onClick={() =>
+            void sharePassport()
+          }
+          disabled={
+            !persona ||
+            isCreatingShare
+          }
         >
-          {isCreatingShare ? 'Creating…' : isFarcasterSession ? 'Cast' : 'Share'}
+          {isCreatingShare
+            ? 'Creating…'
+            : isFarcasterSession
+              ? 'Cast'
+              : 'Share'}
         </button>
 
         {!isFarcasterSession && (
           <button
             type="button"
-            onClick={() => void shareToX()}
-            disabled={!persona || isCreatingShare}
+            onClick={() =>
+              void shareToX()
+            }
+            disabled={
+              !persona ||
+              isCreatingShare
+            }
           >
             X
           </button>
@@ -1283,29 +2577,50 @@ export function TobyworldPondPassport() {
 
         <button
           type="button"
-          onClick={() => void savePng()}
-          disabled={!persona || isCreatingImage}
+          onClick={() =>
+            void savePng()
+          }
+          disabled={
+            !persona ||
+            isCreatingImage
+          }
         >
-          {isCreatingImage ? 'Drawing…' : 'Save PNG'}
+          {isCreatingImage
+            ? 'Drawing…'
+            : 'Save PNG'}
         </button>
 
         <button
           type="button"
-          onClick={() => void copyPassport()}
-          disabled={!persona || isCreatingShare}
+          onClick={() =>
+            void copyPassport()
+          }
+          disabled={
+            !persona ||
+            isCreatingShare
+          }
         >
           Copy
         </button>
 
         {isConnected && (
-          <button type="button" className="ghost" onClick={() => disconnect()}>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() =>
+              disconnect()
+            }
+          >
             Disconnect
           </button>
         )}
       </div>
 
       {notice && (
-        <p className="pond-passport-notice" role="status">
+        <p
+          className="pond-passport-notice"
+          role="status"
+        >
           {notice}
         </p>
       )}
