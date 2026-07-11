@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
+import type { OwnedPatch } from '@/lib/tobyworld-patches';
 import { useMiniAppRuntime } from './MiniAppBoot';
 import './daily-pond-rite.css';
 
@@ -69,13 +70,10 @@ type DailyRiteApiResponse = {
   rite?: DailyRite;
   completedToday?: boolean;
   alreadyCompleted?: boolean;
-
   profile?: DailyRiteProfileRow | null;
   snapshot?: DailyRiteSnapshot | null;
-
   todayEvent?: DailyRiteEvent | null;
   event?: DailyRiteEvent | null;
-
   streak?: number;
   streakCount?: number;
   bestStreak?: number;
@@ -84,12 +82,12 @@ type DailyRiteApiResponse = {
   currentMark?: string;
   currentEchoPower?: number;
   highestEchoPower?: number;
-
   shareText?: string | null;
   totalEchoes?: number;
   totalRites?: number;
   multiplier?: RiteMultiplier;
-
+  unlockedPatchIds?: string[];
+  unlockedPatches?: OwnedPatch[];
   error?: string;
 };
 
@@ -157,11 +155,7 @@ function getApiUrl(path: string) {
 
 function getBoundQuickAuthFetch() {
   const quickAuth = (sdk as QuickAuthSdk).quickAuth;
-
-  if (!quickAuth?.fetch) {
-    return null;
-  }
-
+  if (!quickAuth?.fetch) return null;
   return quickAuth.fetch.bind(quickAuth);
 }
 
@@ -210,11 +204,7 @@ function getMiniAppProfile(runtime: RuntimeProfileFields) {
     user?.avatarUrl ??
     null;
 
-  return {
-    displayName,
-    handle,
-    pfpUrl,
-  };
+  return { displayName, handle, pfpUrl };
 }
 
 function getRiteInstruction(rite: DailyRite) {
@@ -228,51 +218,32 @@ function getRiteInstruction(rite: DailyRite) {
 function getRiteSymbolClass(rite: DailyRite) {
   if (rite.key === 'still-water') return 'is-red-triangle';
   if (rite.icon === '△') return 'is-red-triangle';
-
   return '';
 }
 
 function getNextMark(streak: number) {
   if (streak < 1) {
-    return {
-      label: 'Still-Water Tender',
-      remaining: 1 - streak,
-    };
+    return { label: 'Still-Water Tender', remaining: 1 - streak };
   }
 
   if (streak < 3) {
-    return {
-      label: 'Leaf Binder',
-      remaining: 3 - streak,
-    };
+    return { label: 'Leaf Binder', remaining: 3 - streak };
   }
 
   if (streak < 5) {
-    return {
-      label: 'Current Walker',
-      remaining: 5 - streak,
-    };
+    return { label: 'Current Walker', remaining: 5 - streak };
   }
 
   if (streak < 7) {
-    return {
-      label: 'Rootbed Seeker',
-      remaining: 7 - streak,
-    };
+    return { label: 'Rootbed Seeker', remaining: 7 - streak };
   }
 
   if (streak < 14) {
-    return {
-      label: 'Bedrock Keeper',
-      remaining: 14 - streak,
-    };
+    return { label: 'Bedrock Keeper', remaining: 14 - streak };
   }
 
   if (streak < 30) {
-    return {
-      label: 'Gate Watcher',
-      remaining: 30 - streak,
-    };
+    return { label: 'Gate Watcher', remaining: 30 - streak };
   }
 
   return {
@@ -360,10 +331,7 @@ function normalizeDailyRiteResponse(
     event?.mark,
   );
 
-  const shareText =
-    response.shareText ??
-    event?.share_text ??
-    null;
+  const shareText = response.shareText ?? event?.share_text ?? null;
 
   return {
     fid: response.fid ?? snapshot?.fid ?? profile?.fid ?? 0,
@@ -414,6 +382,16 @@ async function safeCopyText(value: string) {
   }
 }
 
+function revealUnlockedPatches(patches: OwnedPatch[] | undefined) {
+  if (!Array.isArray(patches) || patches.length === 0) return;
+
+  window.dispatchEvent(
+    new CustomEvent('tobyworld:patch-unlocked', {
+      detail: patches,
+    }),
+  );
+}
+
 export function DailyPondRite() {
   const miniApp = useMiniAppRuntime();
 
@@ -444,25 +422,15 @@ export function DailyPondRite() {
       return 'Farcaster is open, but Quick Auth is not ready yet.';
     }
 
-    if (isLoading) {
-      return 'Reading the pond…';
-    }
-
-    if (!data) {
-      return 'Reading today’s pond record…';
-    }
+    if (isLoading) return 'Reading the pond…';
+    if (!data) return 'Reading today’s pond record…';
 
     if (data.completedToday) {
       return 'Today’s rite is complete. The pond remembers.';
     }
 
     return 'Complete today’s rite to extend your streak.';
-  }, [
-    data,
-    isLoading,
-    miniApp.isMiniApp,
-    quickAuthFetch,
-  ]);
+  }, [data, isLoading, miniApp.isMiniApp, quickAuthFetch]);
 
   const fetchDailyRite = useCallback(async () => {
     const authFetch = getBoundQuickAuthFetch();
@@ -487,9 +455,7 @@ export function DailyPondRite() {
       const { raw, normalized } = await readJsonResponse(response);
 
       if (!response.ok) {
-        throw new Error(
-          raw.error || 'Unable to read today’s rite.',
-        );
+        throw new Error(raw.error || 'Unable to read today’s rite.');
       }
 
       setData(normalized);
@@ -543,20 +509,27 @@ export function DailyPondRite() {
       const { raw, normalized } = await readJsonResponse(response);
 
       if (!response.ok) {
-        throw new Error(
-          raw.error || 'Unable to complete today’s rite.',
-        );
+        throw new Error(raw.error || 'Unable to complete today’s rite.');
       }
 
       setData(normalized);
+      revealUnlockedPatches(raw.unlockedPatches);
 
       setNotice(
         raw.alreadyCompleted
           ? 'Today’s rite was already saved. The pond remembers.'
-          : 'Rite complete. Your pond streak was saved.',
+          : raw.unlockedPatches?.length
+            ? `Rite complete. ${raw.unlockedPatches.length} new patch${
+                raw.unlockedPatches.length === 1 ? '' : 'es'
+              } stitched.`
+            : 'Rite complete. Your pond streak was saved.',
       );
 
-      window.navigator.vibrate?.([12, 28, 18]);
+      window.navigator.vibrate?.(
+        raw.unlockedPatches?.length
+          ? [18, 35, 22, 45, 18]
+          : [12, 28, 18],
+      );
     } catch (error) {
       setNotice(
         error instanceof Error
@@ -584,9 +557,7 @@ export function DailyPondRite() {
 
       setNotice('Cast composer opened. Let the ripple travel.');
     } catch {
-      const copied = await safeCopyText(
-        `${shareText}\n\n${appUrl}`,
-      );
+      const copied = await safeCopyText(`${shareText}\n\n${appUrl}`);
 
       setNotice(
         copied
@@ -603,15 +574,9 @@ export function DailyPondRite() {
     }
 
     const appUrl = getShareUrl();
+    const intent = new URL('https://twitter.com/intent/tweet');
 
-    const intent = new URL(
-      'https://twitter.com/intent/tweet',
-    );
-
-    intent.searchParams.set(
-      'text',
-      `${shareText}\n\n${appUrl}`,
-    );
+    intent.searchParams.set('text', `${shareText}\n\n${appUrl}`);
 
     window.open(
       intent.toString(),
@@ -630,32 +595,21 @@ export function DailyPondRite() {
       `${shareText}\n\n${getShareUrl()}`,
     );
 
-    setNotice(
-      copied
-        ? 'Rite copied.'
-        : 'Unable to copy the rite.',
-    );
+    setNotice(copied ? 'Rite copied.' : 'Unable to copy the rite.');
   }
 
   return (
     <section
       className={`daily-pond ${
-        data?.completedToday
-          ? 'is-complete'
-          : 'needs-rite'
+        data?.completedToday ? 'is-complete' : 'needs-rite'
       }`}
       aria-label="Daily Tobyworld Pond Rite"
     >
-      <div
-        className="daily-pond-glow"
-        aria-hidden="true"
-      />
-
+      <div className="daily-pond-glow" aria-hidden="true" />
       <div
         className="daily-pond-ripple daily-pond-ripple-one"
         aria-hidden="true"
       />
-
       <div
         className="daily-pond-ripple daily-pond-ripple-two"
         aria-hidden="true"
@@ -671,11 +625,7 @@ export function DailyPondRite() {
         <div className="daily-pond-user-card">
           <div className="daily-pond-pfp">
             {profile.pfpUrl ? (
-              <img
-                src={profile.pfpUrl}
-                alt=""
-                aria-hidden="true"
-              />
+              <img src={profile.pfpUrl} alt="" aria-hidden="true" />
             ) : (
               <span>🐸</span>
             )}
@@ -699,9 +649,7 @@ export function DailyPondRite() {
 
       <div className="daily-pond-card">
         <div
-          className={`daily-pond-symbol ${getRiteSymbolClass(
-            rite,
-          )}`}
+          className={`daily-pond-symbol ${getRiteSymbolClass(rite)}`}
         >
           <span>{rite.icon}</span>
         </div>
@@ -714,45 +662,15 @@ export function DailyPondRite() {
       </div>
 
       <div className="daily-pond-status-strip">
-        <span
-          className={
-            data?.completedToday ? 'is-lit' : ''
-          }
-        >
-          △
-        </span>
-
+        <span className={data?.completedToday ? 'is-lit' : ''}>△</span>
         <i />
-
-        <span
-          className={streak >= 1 ? 'is-lit' : ''}
-        >
-          🐸
-        </span>
-
+        <span className={streak >= 1 ? 'is-lit' : ''}>🐸</span>
         <i />
-
-        <span
-          className={streak >= 3 ? 'is-lit' : ''}
-        >
-          🍃
-        </span>
-
+        <span className={streak >= 3 ? 'is-lit' : ''}>🍃</span>
         <i />
-
-        <span
-          className={streak >= 5 ? 'is-lit' : ''}
-        >
-          🌀
-        </span>
-
+        <span className={streak >= 5 ? 'is-lit' : ''}>🌀</span>
         <i />
-
-        <span
-          className={streak >= 7 ? 'is-lit' : ''}
-        >
-          ✦
-        </span>
+        <span className={streak >= 7 ? 'is-lit' : ''}>✦</span>
       </div>
 
       <div className="daily-pond-stats">
@@ -863,10 +781,7 @@ export function DailyPondRite() {
       </div>
 
       {notice && (
-        <p
-          className="daily-pond-notice"
-          role="status"
-        >
+        <p className="daily-pond-notice" role="status">
           {notice}
         </p>
       )}
