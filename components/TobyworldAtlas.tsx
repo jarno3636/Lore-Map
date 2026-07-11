@@ -1,13 +1,29 @@
-'use client';
+use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
+import type { OwnedPatch } from '@/lib/tobyworld-patches';
 import { loreFragments, type LoreFragment } from '@/lib/lore';
 
 type NodeId = 'toby' | 'patience' | 'taboshi' | 'sato' | 'loreland' | 'gate' | 'share';
 type MapNode = Exclude<NodeId, 'share'>;
 type RitualState = 'dormant' | 'holding' | 'awakened';
 type ShareTarget = 'farcaster' | 'x' | 'message' | 'copy';
+
+type AtlasSdk = typeof sdk & {
+  quickAuth?: {
+    fetch?: (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => Promise<Response>;
+  };
+};
+
+type AtlasPatchEventResponse = {
+  ok?: boolean;
+  error?: string;
+  unlockedPatches?: OwnedPatch[];
+};
 
 type LinkItem = {
   label: string;
@@ -230,6 +246,94 @@ function getFragmentShareUrl(fragment: LoreFragment) {
   return url.toString();
 }
 
+function randomEventId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getAtlasSessionId() {
+  const storageKey = 'tobyworld:atlas-patch-session';
+  const existing = window.sessionStorage.getItem(storageKey);
+
+  if (existing) return existing;
+
+  const sessionId = randomEventId();
+  window.sessionStorage.setItem(storageKey, sessionId);
+  return sessionId;
+}
+
+function revealAtlasPatchUnlocks(
+  patches: OwnedPatch[] | undefined,
+) {
+  if (!Array.isArray(patches) || patches.length === 0) return;
+
+  window.dispatchEvent(
+    new CustomEvent('tobyworld:patch-unlocked', {
+      detail: patches,
+    }),
+  );
+}
+
+async function recordAtlasPatchEvent({
+  eventKey,
+  uniqueKey,
+  idempotencyKey,
+  context,
+}: {
+  eventKey: 'atlas_opened' | 'atlas_node_visited';
+  uniqueKey?: string;
+  idempotencyKey: string;
+  context?: Record<string, unknown>;
+}) {
+  const quickAuth = (sdk as AtlasSdk).quickAuth;
+
+  if (!quickAuth?.fetch) return;
+
+  try {
+    const response = await quickAuth.fetch(
+      '/api/tobyworld/traveler-pack',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({
+          action: 'record_event',
+          event: {
+            eventKey,
+            value: 1,
+            uniqueKey,
+            idempotencyKey,
+            context: {
+              ...context,
+              path: window.location.pathname,
+            },
+            occurredAt: new Date().toISOString(),
+          },
+        }),
+      },
+    );
+
+    const result = (await response.json()) as AtlasPatchEventResponse;
+
+    if (!response.ok || !result.ok) {
+      console.error(
+        'Atlas patch event rejected:',
+        result.error ?? response.statusText,
+      );
+      return;
+    }
+
+    revealAtlasPatchUnlocks(result.unlockedPatches);
+  } catch (error) {
+    console.error('Atlas patch event failed:', error);
+  }
+}
+
 export function TobyworldAtlas() {
   const [selectedNode, setSelectedNode] = useState<NodeId | null>(null);
   const [ritual, setRitual] = useState<RitualState>('dormant');
@@ -244,6 +348,7 @@ export function TobyworldAtlas() {
   const frameRef = useRef<number | null>(null);
   const holdStartedAt = useRef<number | null>(null);
   const awakenedRef = useRef(false);
+  const didRecordAtlasOpenRef = useRef(false);
 
   const lorelandUnlocked = ritual === 'awakened' && gardenLevel >= 2 && riverAwake;
 
@@ -332,6 +437,23 @@ export function TobyworldAtlas() {
   }, []);
 
   useEffect(() => {
+    if (!didLoadAtlasState || didRecordAtlasOpenRef.current) return;
+
+    didRecordAtlasOpenRef.current = true;
+
+    const sessionId = getAtlasSessionId();
+
+    void recordAtlasPatchEvent({
+      eventKey: 'atlas_opened',
+      idempotencyKey: `atlas-open:${sessionId}`,
+      context: {
+        sessionId,
+        restoredState: Boolean(window.localStorage.getItem(STORAGE_KEY)),
+      },
+    });
+  }, [didLoadAtlasState]);
+
+  useEffect(() => {
     if (!didLoadAtlasState) return;
 
     window.localStorage.setItem(
@@ -366,6 +488,21 @@ export function TobyworldAtlas() {
     return loreFragments[indexByNode[node]] ?? loreFragments[0];
   }
 
+  function recordNodeDiscovery(node: MapNode) {
+    void recordAtlasPatchEvent({
+      eventKey: 'atlas_node_visited',
+      uniqueKey: node,
+      idempotencyKey: `atlas-node:${node}`,
+      context: {
+        nodeId: node,
+        ritual,
+        gardenLevel,
+        riverAwake,
+        lorelandUnlocked,
+      },
+    });
+  }
+
   function chooseNode(node: NodeId) {
     setSelectedNode(node);
 
@@ -378,6 +515,7 @@ export function TobyworldAtlas() {
 
     if (node === 'loreland' && lorelandUnlocked) {
       setLorelandSeen(true);
+      recordNodeDiscovery('loreland');
       setToast('The roots reached bedrock. Loreland remembers.');
       return;
     }
@@ -387,6 +525,7 @@ export function TobyworldAtlas() {
       return;
     }
 
+    recordNodeDiscovery(node);
     setToast(`${nodeDetails[node].eyebrow}. ${nodeDetails[node].description}`);
   }
 
