@@ -44,6 +44,15 @@ type ProgressRow = {
   completed_at: string | null;
 };
 
+type LayoutRow = {
+  patch_id: string;
+  x: number | string;
+  y: number | string;
+  rotation: number | string;
+  scale: number | string;
+  z_index: number | string;
+};
+
 type InsertedEventRow = {
   id: string;
 };
@@ -54,7 +63,20 @@ type GrantedPatchRow = {
   featured: boolean;
 };
 
-const EVENT_KEYS = new Set([
+type ExistingProgressRow = {
+  current_value: number;
+  target_value: number;
+};
+
+type TravelerPackActionBody = {
+  action?: unknown;
+  event?: unknown;
+  placements?: unknown;
+  patchId?: unknown;
+  platform?: unknown;
+};
+
+const EVENT_KEYS = new Set<string>([
   'daily_rite_completed',
   'daily_rite_streak',
   'passport_opened',
@@ -93,7 +115,30 @@ function jsonError(message: string, status = 400) {
       ok: false,
       error: message,
     },
-    { status },
+    {
+      status,
+    },
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function isTravelerEventInput(
+  value: unknown,
+): value is TravelerEventInput {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.eventKey === 'string' &&
+    typeof value.idempotencyKey === 'string'
   );
 }
 
@@ -101,12 +146,20 @@ function isWithinAvailability(
   row: PatchDefinitionRow,
   now = new Date(),
 ) {
-  if (row.starts_at && new Date(row.starts_at) > now) {
-    return false;
+  if (row.starts_at) {
+    const startsAt = new Date(row.starts_at);
+
+    if (!Number.isNaN(startsAt.getTime()) && startsAt > now) {
+      return false;
+    }
   }
 
-  if (row.ends_at && new Date(row.ends_at) < now) {
-    return false;
+  if (row.ends_at) {
+    const endsAt = new Date(row.ends_at);
+
+    if (!Number.isNaN(endsAt.getTime()) && endsAt < now) {
+      return false;
+    }
   }
 
   return true;
@@ -124,17 +177,49 @@ function numberRequirement(
     : fallback;
 }
 
-function stringArrayRequirement(
+function numberArrayRequirement(
   requirement: Record<string, unknown>,
   key: string,
-): string[] {
+): number[] {
   const value = requirement[key];
 
-  return Array.isArray(value)
-    ? value.filter(
-        (item): item is string => typeof item === 'string',
-      )
-    : [];
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (typeof item === 'number') {
+        return item;
+      }
+
+      if (typeof item === 'string' && item.trim() !== '') {
+        return Number(item);
+      }
+
+      return Number.NaN;
+    })
+    .filter(
+      (item): item is number =>
+        Number.isFinite(item) &&
+        item >= 0 &&
+        item <= 23,
+    );
+}
+
+function sanitizeNumber(
+  value: unknown,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(minimum, Math.min(maximum, parsed));
 }
 
 async function loadPack(fid: number) {
@@ -147,33 +232,20 @@ async function loadPack(fid: number) {
     supabaseAdmin
       .from('tobyworld_patch_definitions')
       .select(
-        [
-          'id',
-          'name',
-          'short_description',
-          'lore',
-          'category',
-          'rarity',
-          'image_path',
-          'public_hint',
-          'is_hidden',
-          'sort_order',
-          'animation_key',
-          'unlock_type',
-          'event_key',
-          'requirement',
-          'starts_at',
-          'ends_at',
-        ].join(','),
+        'id,name,short_description,lore,category,rarity,image_path,public_hint,is_hidden,sort_order,animation_key,unlock_type,event_key,requirement,starts_at,ends_at',
       )
       .eq('is_active', true)
-      .order('sort_order', { ascending: true }),
+      .order('sort_order', {
+        ascending: true,
+      }),
 
     supabaseAdmin
       .from('tobyworld_owned_patches')
       .select('patch_id,earned_at,featured')
       .eq('fid', fid)
-      .order('earned_at', { ascending: false }),
+      .order('earned_at', {
+        ascending: false,
+      }),
 
     supabaseAdmin
       .from('tobyworld_patch_progress')
@@ -188,33 +260,43 @@ async function loadPack(fid: number) {
       .eq('fid', fid),
   ]);
 
-  const error =
+  const queryError =
     definitionsResult.error ??
     ownedResult.error ??
     progressResult.error ??
     layoutResult.error;
 
-  if (error) {
-    throw error;
+  if (queryError) {
+    throw queryError;
   }
 
-  const definitions =
-    (definitionsResult.data ?? []) as PatchDefinitionRow[];
+  const definitions = (
+    definitionsResult.data ?? []
+  ) as unknown as PatchDefinitionRow[];
 
-  const owned =
-    (ownedResult.data ?? []) as OwnedPatchRow[];
+  const owned = (
+    ownedResult.data ?? []
+  ) as unknown as OwnedPatchRow[];
 
-  const progress =
-    (progressResult.data ?? []) as ProgressRow[];
+  const progress = (
+    progressResult.data ?? []
+  ) as unknown as ProgressRow[];
 
-  const definitionsById = new Map(
+  const layoutRows = (
+    layoutResult.data ?? []
+  ) as unknown as LayoutRow[];
+
+  const definitionsById = new Map<
+    string,
+    PatchDefinitionRow
+  >(
     definitions.map((definition) => [
       definition.id,
       definition,
     ]),
   );
 
-  const ownedIds = new Set(
+  const ownedIds = new Set<string>(
     owned.map((item) => item.patch_id),
   );
 
@@ -265,7 +347,7 @@ async function loadPack(fid: number) {
     )
     .map(safeDefinition);
 
-  const layout = (layoutResult.data ?? []).map((item) => ({
+  const storedLayout = layoutRows.map((item) => ({
     patchId: item.patch_id,
     x: Number(item.x),
     y: Number(item.y),
@@ -275,8 +357,8 @@ async function loadPack(fid: number) {
   }));
 
   const backpackLayout =
-    layout.length > 0
-      ? layout
+    storedLayout.length > 0
+      ? storedLayout
       : buildDefaultLayout(
           ownedPatches.map((patch) => patch.id),
         );
@@ -332,7 +414,7 @@ async function grantPatch(
     throw error;
   }
 
-  return data as GrantedPatchRow | null;
+  return data as unknown as GrantedPatchRow | null;
 }
 
 async function evaluateCounterPatch(
@@ -341,23 +423,31 @@ async function evaluateCounterPatch(
   event: TravelerEventInput,
   eventId: string,
 ): Promise<GrantedPatchRow | null> {
-  const target = numberRequirement(
-    definition.requirement,
-    'target',
+  const target = Math.max(
     1,
+    numberRequirement(
+      definition.requirement,
+      'target',
+      1,
+    ),
   );
 
-  const { data: existing, error: existingError } =
-    await supabaseAdmin
-      .from('tobyworld_patch_progress')
-      .select('current_value,target_value')
-      .eq('fid', fid)
-      .eq('patch_id', definition.id)
-      .maybeSingle();
+  const {
+    data: existingData,
+    error: existingError,
+  } = await supabaseAdmin
+    .from('tobyworld_patch_progress')
+    .select('current_value,target_value')
+    .eq('fid', fid)
+    .eq('patch_id', definition.id)
+    .maybeSingle();
 
   if (existingError) {
     throw existingError;
   }
+
+  const existing =
+    existingData as unknown as ExistingProgressRow | null;
 
   let nextValue = existing?.current_value ?? 0;
 
@@ -379,16 +469,18 @@ async function evaluateCounterPatch(
       return null;
     }
 
-    const { count, error: countError } =
-      await supabaseAdmin
-        .from('tobyworld_patch_events')
-        .select('id', {
-          head: true,
-          count: 'exact',
-        })
-        .eq('fid', fid)
-        .eq('event_key', event.eventKey)
-        .not('unique_key', 'is', null);
+    const {
+      count,
+      error: countError,
+    } = await supabaseAdmin
+      .from('tobyworld_patch_events')
+      .select('unique_key', {
+        head: true,
+        count: 'exact',
+      })
+      .eq('fid', fid)
+      .eq('event_key', event.eventKey)
+      .not('unique_key', 'is', null);
 
     if (countError) {
       throw countError;
@@ -396,16 +488,24 @@ async function evaluateCounterPatch(
 
     nextValue = count ?? 0;
   } else {
+    const eventValue =
+      typeof event.value === 'number' &&
+      Number.isFinite(event.value)
+        ? event.value
+        : 1;
+
     nextValue += Math.max(
       1,
-      Math.min(1000, event.value ?? 1),
+      Math.min(1000, eventValue),
     );
   }
 
   const completed = nextValue >= target;
-  const now = new Date().toISOString();
+  const timestamp = new Date().toISOString();
 
-  const { error: progressError } = await supabaseAdmin
+  const {
+    error: progressError,
+  } = await supabaseAdmin
     .from('tobyworld_patch_progress')
     .upsert(
       {
@@ -413,8 +513,8 @@ async function evaluateCounterPatch(
         patch_id: definition.id,
         current_value: nextValue,
         target_value: target,
-        last_progress_at: now,
-        completed_at: completed ? now : null,
+        last_progress_at: timestamp,
+        completed_at: completed ? timestamp : null,
       },
       {
         onConflict: 'fid,patch_id',
@@ -446,27 +546,21 @@ async function evaluateTimeWindowPatch(
     ? new Date(event.occurredAt)
     : new Date();
 
-  const allowedHours = stringArrayRequirement(
+  const allowedHours = numberArrayRequirement(
     definition.requirement,
     'localHours',
-  ).map(Number);
+  );
 
-  const numericHours = Array.isArray(
-    definition.requirement.localHours,
-  )
-    ? definition.requirement.localHours.filter(
-        (value): value is number =>
-          typeof value === 'number' &&
-          Number.isFinite(value),
-      )
-    : allowedHours;
+  const contextLocalHour =
+    typeof event.context?.localHour === 'number' &&
+    Number.isFinite(event.context.localHour)
+      ? event.context.localHour
+      : null;
 
   const localHour =
-    typeof event.context?.localHour === 'number'
-      ? event.context.localHour
-      : eventTime.getHours();
+    contextLocalHour ?? eventTime.getHours();
 
-  if (!numericHours.includes(localHour)) {
+  if (!allowedHours.includes(localHour)) {
     return null;
   }
 
@@ -482,7 +576,7 @@ async function recordEvent(
   event: TravelerEventInput,
 ) {
   if (!EVENT_KEYS.has(event.eventKey)) {
-    throw new Error('Unsupported traveler event');
+    throw new Error('Unsupported traveler event.');
   }
 
   if (
@@ -490,15 +584,23 @@ async function recordEvent(
     event.idempotencyKey.length < 8 ||
     event.idempotencyKey.length > 180
   ) {
-    throw new Error('Invalid idempotency key');
+    throw new Error('Invalid idempotency key.');
   }
+
+  const eventValue =
+    typeof event.value === 'number' &&
+    Number.isFinite(event.value)
+      ? event.value
+      : 1;
 
   const value = Math.max(
     1,
-    Math.min(1000, event.value ?? 1),
+    Math.min(1000, eventValue),
   );
 
-  const context = event.context ?? {};
+  const context = isRecord(event.context)
+    ? event.context
+    : {};
 
   const uniqueKey =
     event.uniqueKey ??
@@ -541,11 +643,11 @@ async function recordEvent(
   }
 
   const inserted =
-    insertedData as InsertedEventRow | null;
+    insertedData as unknown as InsertedEventRow | null;
 
   if (!inserted?.id) {
     throw new Error(
-      'Traveler event was saved without returning an event ID.',
+      'Traveler event was stored without returning an event ID.',
     );
   }
 
@@ -558,24 +660,7 @@ async function recordEvent(
   } = await supabaseAdmin
     .from('tobyworld_patch_definitions')
     .select(
-      [
-        'id',
-        'name',
-        'short_description',
-        'lore',
-        'category',
-        'rarity',
-        'image_path',
-        'public_hint',
-        'is_hidden',
-        'sort_order',
-        'animation_key',
-        'unlock_type',
-        'event_key',
-        'requirement',
-        'starts_at',
-        'ends_at',
-      ].join(','),
+      'id,name,short_description,lore,category,rarity,image_path,public_hint,is_hidden,sort_order,animation_key,unlock_type,event_key,requirement,starts_at,ends_at',
     )
     .eq('is_active', true)
     .eq('event_key', event.eventKey);
@@ -584,8 +669,9 @@ async function recordEvent(
     throw definitionsError;
   }
 
-  const definitions =
-    (definitionsData ?? []) as PatchDefinitionRow[];
+  const definitions = (
+    definitionsData ?? []
+  ) as unknown as PatchDefinitionRow[];
 
   const unlockedPatchIds: string[] = [];
 
@@ -645,11 +731,8 @@ async function recordEvent(
     .upsert(
       {
         fid,
-        backpack_tier: getBackpackTier(
-          count ?? 0,
-        ),
-        updated_at:
-          new Date().toISOString(),
+        backpack_tier: getBackpackTier(count ?? 0),
+        updated_at: new Date().toISOString(),
       },
       {
         onConflict: 'fid',
@@ -664,6 +747,59 @@ async function recordEvent(
     duplicate: false,
     unlockedPatchIds,
   };
+}
+
+function sanitizePlacements(
+  value: unknown,
+): PatchPlacement[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, 150)
+    .filter(isRecord)
+    .map((placement, index) => ({
+      patchId: String(
+        placement.patchId ?? '',
+      ),
+      x: sanitizeNumber(
+        placement.x,
+        50,
+        0,
+        100,
+      ),
+      y: sanitizeNumber(
+        placement.y,
+        50,
+        0,
+        100,
+      ),
+      rotation: sanitizeNumber(
+        placement.rotation,
+        0,
+        -180,
+        180,
+      ),
+      scale: sanitizeNumber(
+        placement.scale,
+        1,
+        0.35,
+        2.5,
+      ),
+      zIndex: Math.round(
+        sanitizeNumber(
+          placement.zIndex,
+          index,
+          0,
+          500,
+        ),
+      ),
+    }))
+    .filter(
+      (placement) =>
+        placement.patchId.length > 0,
+    );
 }
 
 export async function GET(
@@ -695,7 +831,7 @@ export async function GET(
     return jsonError(
       error instanceof Error
         ? error.message
-        : 'Unable to load traveler pack',
+        : 'Unable to load traveler pack.',
       500,
     );
   }
@@ -716,31 +852,33 @@ export async function POST(
     }
 
     const fid = auth.fid;
-    const body: unknown = await request.json();
 
-    if (
-      !body ||
-      typeof body !== 'object' ||
-      !('action' in body) ||
-      typeof body.action !== 'string'
-    ) {
-      return jsonError('Missing action');
+    const rawBody: unknown =
+      await request.json();
+
+    if (!isRecord(rawBody)) {
+      return jsonError(
+        'Invalid request body.',
+      );
+    }
+
+    const body =
+      rawBody as TravelerPackActionBody;
+
+    if (typeof body.action !== 'string') {
+      return jsonError('Missing action.');
     }
 
     if (body.action === 'record_event') {
-      if (
-        !('event' in body) ||
-        !body.event ||
-        typeof body.event !== 'object'
-      ) {
+      if (!isTravelerEventInput(body.event)) {
         return jsonError(
-          'Missing traveler event',
+          'Missing or invalid traveler event.',
         );
       }
 
       const result = await recordEvent(
         fid,
-        body.event as TravelerEventInput,
+        body.event,
       );
 
       const pack = await loadPack(fid);
@@ -755,70 +893,24 @@ export async function POST(
     }
 
     if (body.action === 'update_layout') {
-      const placements =
-        'placements' in body &&
-        Array.isArray(body.placements)
-          ? (body.placements as PatchPlacement[])
-          : [];
-
-      if (placements.length > 150) {
+      if (
+        Array.isArray(body.placements) &&
+        body.placements.length > 150
+      ) {
         return jsonError(
-          'Too many placements',
+          'Too many placements.',
         );
       }
 
-      const sanitized = placements.map(
-        (placement, index) => ({
-          patchId: String(
-            placement.patchId,
-          ),
-          x: Math.max(
-            0,
-            Math.min(
-              100,
-              Number(placement.x),
-            ),
-          ),
-          y: Math.max(
-            0,
-            Math.min(
-              100,
-              Number(placement.y),
-            ),
-          ),
-          rotation: Math.max(
-            -180,
-            Math.min(
-              180,
-              Number(placement.rotation),
-            ),
-          ),
-          scale: Math.max(
-            0.35,
-            Math.min(
-              2.5,
-              Number(placement.scale),
-            ),
-          ),
-          zIndex: Math.max(
-            0,
-            Math.min(
-              500,
-              Number(
-                placement.zIndex ??
-                  index,
-              ),
-            ),
-          ),
-        }),
-      );
+      const placements =
+        sanitizePlacements(body.placements);
 
       const { error } =
         await supabaseAdmin.rpc(
           'tobyworld_replace_patch_layout',
           {
             p_fid: fid,
-            p_placements: sanitized,
+            p_placements: placements,
           },
         );
 
@@ -833,11 +925,10 @@ export async function POST(
 
     if (body.action === 'feature_patch') {
       const patchId =
-        'patchId' in body &&
-        body.patchId !== null &&
-        body.patchId !== undefined
-          ? String(body.patchId)
-          : null;
+        body.patchId === null ||
+        body.patchId === undefined
+          ? null
+          : String(body.patchId);
 
       const { error } =
         await supabaseAdmin.rpc(
@@ -859,15 +950,13 @@ export async function POST(
 
     if (body.action === 'record_share') {
       const patchId =
-        'patchId' in body &&
         typeof body.patchId === 'string'
           ? body.patchId
           : null;
 
       const platform =
-        'platform' in body &&
         typeof body.platform === 'string'
-          ? body.platform
+          ? body.platform.slice(0, 80)
           : 'farcaster';
 
       const { error } = await supabaseAdmin
@@ -890,7 +979,7 @@ export async function POST(
       });
     }
 
-    return jsonError('Unknown action');
+    return jsonError('Unknown action.');
   } catch (error) {
     console.error(
       'Traveler pack POST failed:',
@@ -900,7 +989,7 @@ export async function POST(
     return jsonError(
       error instanceof Error
         ? error.message
-        : 'Traveler pack request failed',
+        : 'Traveler pack request failed.',
       500,
     );
   }
