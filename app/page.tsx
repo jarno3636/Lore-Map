@@ -43,6 +43,185 @@ const quickPaths = [
   },
 ];
 
+function TravelerPackIcon() {
+  return (
+    <svg
+      className="traveler-pack-icon"
+      viewBox="0 0 64 64"
+      role="img"
+      aria-label="Explorer backpack"
+    >
+      <defs>
+        <linearGradient
+          id="traveler-pack-canvas"
+          x1="10"
+          y1="8"
+          x2="52"
+          y2="58"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0" stopColor="#b88550" />
+          <stop offset="0.55" stopColor="#8a5f38" />
+          <stop offset="1" stopColor="#5d3c26" />
+        </linearGradient>
+
+        <linearGradient
+          id="traveler-pack-leather"
+          x1="18"
+          y1="16"
+          x2="47"
+          y2="50"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0" stopColor="#7b5132" />
+          <stop offset="1" stopColor="#3e281d" />
+        </linearGradient>
+
+        <radialGradient
+          id="traveler-pack-glow"
+          cx="50%"
+          cy="50%"
+          r="50%"
+        >
+          <stop offset="0" stopColor="#ffe9a8" stopOpacity="0.9" />
+          <stop offset="1" stopColor="#d8a84e" stopOpacity="0" />
+        </radialGradient>
+
+        <filter
+          id="traveler-pack-shadow"
+          x="-30%"
+          y="-30%"
+          width="160%"
+          height="160%"
+        >
+          <feDropShadow
+            dx="0"
+            dy="3"
+            stdDeviation="2.5"
+            floodColor="#000000"
+            floodOpacity="0.35"
+          />
+        </filter>
+      </defs>
+
+      <g filter="url(#traveler-pack-shadow)">
+        <path
+          d="M21 16.5C21 10.7 25.6 6 31.5 6S42 10.7 42 16.5"
+          fill="none"
+          stroke="#4b3020"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+
+        <path
+          d="M17 18.5C13.7 22.7 12 28 12 34v15.5c0 4.7 3.8 8.5 8.5 8.5h23c4.7 0 8.5-3.8 8.5-8.5V34c0-6-1.7-11.3-5-15.5H17Z"
+          fill="url(#traveler-pack-canvas)"
+          stroke="#3f291d"
+          strokeWidth="2.8"
+          strokeLinejoin="round"
+        />
+
+        <path
+          d="M16.5 20.5C21.7 16.8 26.8 15 32 15s10.3 1.8 15.5 5.5v9.2c-4.8 2.8-10 4.3-15.5 4.3s-10.7-1.5-15.5-4.3v-9.2Z"
+          fill="#9a6a40"
+          stroke="#4a3020"
+          strokeWidth="2.4"
+        />
+
+        <path
+          d="M20 35.5h24v16.2c0 2.3-1.8 4.1-4.1 4.1H24.1c-2.3 0-4.1-1.8-4.1-4.1V35.5Z"
+          fill="#6f492f"
+          stroke="#3e281c"
+          strokeWidth="2.3"
+        />
+
+        <path
+          d="M24 35.5v-4.3c0-1.8 1.5-3.2 3.2-3.2h9.6c1.8 0 3.2 1.5 3.2 3.2v4.3"
+          fill="none"
+          stroke="#3e281c"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+        />
+
+        <path
+          d="M23.5 19.7v11.8M40.5 19.7v11.8"
+          stroke="url(#traveler-pack-leather)"
+          strokeWidth="4.6"
+          strokeLinecap="round"
+        />
+
+        <rect
+          x="20.8"
+          y="26"
+          width="5.4"
+          height="5.8"
+          rx="1.2"
+          fill="#d7aa55"
+          stroke="#5e3b21"
+          strokeWidth="1.3"
+        />
+
+        <rect
+          x="37.8"
+          y="26"
+          width="5.4"
+          height="5.8"
+          rx="1.2"
+          fill="#d7aa55"
+          stroke="#5e3b21"
+          strokeWidth="1.3"
+        />
+
+        <path
+          d="M17.7 43.5h-4.3c-2 0-3.6 1.6-3.6 3.6v4.2c0 2 1.6 3.6 3.6 3.6h5.2"
+          fill="#7e5635"
+          stroke="#3e281c"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+
+        <path
+          d="M46.3 43.5h4.3c2 0 3.6 1.6 3.6 3.6v4.2c0 2-1.6 3.6-3.6 3.6h-5.2"
+          fill="#7e5635"
+          stroke="#3e281c"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+
+        <circle
+          cx="32"
+          cy="44"
+          r="6.2"
+          fill="#47624d"
+          stroke="#d8b863"
+          strokeWidth="2"
+        />
+
+        <path
+          d="M28.5 44.5c1.1-2 2.3-3 3.5-3s2.4 1 3.5 3c-1.2 1.8-2.3 2.7-3.5 2.7s-2.3-.9-3.5-2.7Z"
+          fill="#83a867"
+        />
+
+        <circle cx="30.4" cy="42.8" r="0.9" fill="#1e2d20" />
+        <circle cx="33.6" cy="42.8" r="0.9" fill="#1e2d20" />
+
+        <circle
+          cx="48"
+          cy="20"
+          r="8"
+          fill="url(#traveler-pack-glow)"
+          opacity="0.45"
+        />
+
+        <path
+          d="m48 15.5 1.2 3.2 3.3 1.2-3.3 1.2-1.2 3.2-1.2-3.2-3.3-1.2 3.3-1.2L48 15.5Z"
+          fill="#f4d77e"
+        />
+      </g>
+    </svg>
+  );
+}
+
 export default function Home() {
   return (
     <main id="page-top" className="home-shell">
@@ -129,7 +308,9 @@ export default function Home() {
 
             <div className="home-preview-copy">
               <strong>The pond remembers.</strong>
-              <small>Swap Gate · Daily Rite · Passport · Relics</small>
+              <small>
+                Swap Gate · Daily Rite · Passport · Traveler&apos;s Pack · Relics
+              </small>
             </div>
           </div>
         </div>
@@ -193,6 +374,24 @@ export default function Home() {
         </div>
 
         <TobyworldPondPassport />
+
+        <div className="traveler-pack-link">
+          <a href="/pack" className="traveler-pack-button">
+            <span className="traveler-pack-icon-wrap" aria-hidden="true">
+              <TravelerPackIcon />
+            </span>
+
+            <span className="traveler-pack-copy">
+              <small>Explorer&apos;s gear</small>
+              <strong>Traveler&apos;s Pack</strong>
+              <em>View your stitched patch collection</em>
+            </span>
+
+            <span className="traveler-pack-arrow" aria-hidden="true">
+              →
+            </span>
+          </a>
+        </div>
       </section>
 
       <section id="atlas" className="home-section">
@@ -229,6 +428,10 @@ export default function Home() {
 
           <a href="/milestones" rel="noreferrer">
             Relics ↗
+          </a>
+
+          <a href="/pack">
+            Pack ↗
           </a>
 
           <a href="#pond-passport">
