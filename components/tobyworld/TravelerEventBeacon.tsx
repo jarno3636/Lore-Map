@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
+import { sdk } from '@farcaster/miniapp-sdk';
 import type {
   TravelerEventInput,
   TravelerEventKey,
@@ -71,10 +72,9 @@ export default function TravelerEventBeacon({
     const next = queueRef.current.shift();
 
     try {
-      await fetch('/api/tobyworld/traveler-pack', {
+      await sdk.quickAuth.fetch('/api/tobyworld/traveler-pack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         keepalive: true,
         body: JSON.stringify({
           action: 'record_event',

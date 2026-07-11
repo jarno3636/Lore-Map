@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { sdk } from '@farcaster/miniapp-sdk';
 import { useEffect, useMemo, useState } from 'react';
 import {
   CATEGORY_LABELS,
@@ -212,8 +213,7 @@ export default function TobyworldTravelersPack() {
     setError(null);
 
     try {
-      const response = await fetch('/api/tobyworld/traveler-pack', {
-        credentials: 'include',
+      const response = await sdk.quickAuth.fetch('/api/tobyworld/traveler-pack', {
         cache: 'no-store',
       });
       const result = (await response.json()) as ApiResponse;
@@ -283,10 +283,9 @@ export default function TobyworldTravelersPack() {
   }, [filter, ownedById, pack, progressById]);
 
   async function featurePatch(patchId: string) {
-    const response = await fetch('/api/tobyworld/traveler-pack', {
+    const response = await sdk.quickAuth.fetch('/api/tobyworld/traveler-pack', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({
         action: 'feature_patch',
         patchId,
@@ -298,10 +297,9 @@ export default function TobyworldTravelersPack() {
   }
 
   async function sharePack() {
-    await fetch('/api/tobyworld/traveler-pack', {
+    await sdk.quickAuth.fetch('/api/tobyworld/traveler-pack', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({
         action: 'record_share',
         platform: 'farcaster',
