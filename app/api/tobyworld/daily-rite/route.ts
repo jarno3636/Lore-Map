@@ -59,6 +59,41 @@ type RiteProfileSnapshot = {
   highestEchoPower: number;
 };
 
+type PatchDefinitionRow = {
+  id: string;
+  name: string;
+  short_description: string;
+  lore: string;
+  category: string;
+  rarity: string;
+  image_path: string;
+  public_hint: string | null;
+  is_hidden: boolean;
+  sort_order: number;
+  animation_key: string | null;
+};
+
+type ProcessPatchEventResult = {
+  duplicate: boolean;
+  unlockedPatchIds: string[];
+};
+
+type UnlockedPatch = {
+  id: string;
+  name: string;
+  shortDescription: string;
+  lore: string;
+  category: string;
+  rarity: string;
+  imagePath: string;
+  publicHint: string | null;
+  isHidden: boolean;
+  sortOrder: number;
+  animationKey: string | null;
+  earnedAt: string;
+  featured: boolean;
+};
+
 const RITES = [
   {
     key: 'still-water',
@@ -103,7 +138,6 @@ function json(data: unknown, status = 200) {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
-
   return 'Unknown server error.';
 }
 
@@ -113,17 +147,13 @@ function getTodayUtc() {
 
 function getYesterdayUtc() {
   const date = new Date();
-
   date.setUTCDate(date.getUTCDate() - 1);
-
   return date.toISOString().slice(0, 10);
 }
 
 function cleanText(value: string | null | undefined, maxLength = 120) {
   const cleaned = value?.trim();
-
   if (!cleaned) return null;
-
   return cleaned.slice(0, maxLength);
 }
 
@@ -133,7 +163,6 @@ function getMark(streak: number) {
   if (streak >= 7) return 'Rootbed Seeker';
   if (streak >= 5) return 'Current Walker';
   if (streak >= 3) return 'Leaf Binder';
-
   return 'Still-Water Tender';
 }
 
@@ -190,7 +219,6 @@ function buildResponseProfile(
   return {
     profile: profile ?? null,
     snapshot,
-
     streakCount: snapshot.streakCount,
     bestStreak: snapshot.bestStreak,
     totalCompletions: snapshot.totalCompletions,
@@ -215,19 +243,7 @@ async function getDailyProfile(fid: number) {
   const { data, error } = await supabase
     .from('tobyworld_daily_rites')
     .select(
-      [
-        'fid',
-        'streak_count',
-        'best_streak',
-        'total_completions',
-        'last_completed_on',
-        'current_mark',
-        'username',
-        'display_name',
-        'pfp_url',
-        'current_echo_power',
-        'highest_echo_power',
-      ].join(', '),
+      'fid,streak_count,best_streak,total_completions,last_completed_on,current_mark,username,display_name,pfp_url,current_echo_power,highest_echo_power',
     )
     .eq('fid', fid)
     .maybeSingle<DailyRiteRow>();
@@ -245,19 +261,7 @@ async function getTodayEvent(fid: number, today: string) {
   const { data, error } = await supabase
     .from('tobyworld_rite_events')
     .select(
-      [
-        'id',
-        'fid',
-        'rite_date',
-        'rite_key',
-        'mark',
-        'share_text',
-        'completed_at',
-        'streak_count',
-        'total_completions',
-        'echo_power',
-        'multiplier_cap',
-      ].join(', '),
+      'id,fid,rite_date,rite_key,mark,share_text,completed_at,streak_count,total_completions,echo_power,multiplier_cap',
     )
     .eq('fid', fid)
     .eq('rite_date', today)
@@ -270,18 +274,174 @@ async function getTodayEvent(fid: number, today: string) {
   return data;
 }
 
+function safePatchDefinition(row: PatchDefinitionRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    shortDescription: row.short_description,
+    lore: row.lore,
+    category: row.category,
+    rarity: row.rarity,
+    imagePath: row.image_path,
+    publicHint: row.public_hint,
+    isHidden: row.is_hidden,
+    sortOrder: row.sort_order,
+    animationKey: row.animation_key,
+  };
+}
+
+async function processPatchEvent(params: {
+  fid: number;
+  eventKey: 'daily_rite_completed' | 'daily_rite_streak';
+  value: number;
+  idempotencyKey: string;
+  uniqueKey: string;
+  occurredAt: string;
+  context: Record<string, unknown>;
+}) {
+  const supabase = getSupabaseAdmin();
+
+  const { data, error } = await supabase.rpc(
+    'tobyworld_process_patch_event',
+    {
+      p_fid: params.fid,
+      p_event_key: params.eventKey,
+      p_event_value: params.value,
+      p_unique_key: params.uniqueKey,
+      p_idempotency_key: params.idempotencyKey,
+      p_context: params.context,
+      p_occurred_at: params.occurredAt,
+    },
+  );
+
+  if (error) {
+    throw new Error(`Patch event failed: ${error.message}`);
+  }
+
+  const result = data as unknown as ProcessPatchEventResult | null;
+
+  return Array.isArray(result?.unlockedPatchIds)
+    ? result.unlockedPatchIds
+    : [];
+}
+
+async function loadUnlockedPatches(
+  fid: number,
+  patchIds: string[],
+): Promise<UnlockedPatch[]> {
+  if (patchIds.length === 0) return [];
+
+  const supabase = getSupabaseAdmin();
+
+  const [definitionsResult, ownedResult] = await Promise.all([
+    supabase
+      .from('tobyworld_patch_definitions')
+      .select(
+        'id,name,short_description,lore,category,rarity,image_path,public_hint,is_hidden,sort_order,animation_key',
+      )
+      .in('id', patchIds),
+
+    supabase
+      .from('tobyworld_owned_patches')
+      .select('patch_id,earned_at,featured')
+      .eq('fid', fid)
+      .in('patch_id', patchIds),
+  ]);
+
+  const error = definitionsResult.error ?? ownedResult.error;
+
+  if (error) {
+    throw new Error(`Unlocked patch read failed: ${error.message}`);
+  }
+
+  const definitions =
+    (definitionsResult.data ?? []) as unknown as PatchDefinitionRow[];
+
+  const ownershipById = new Map(
+    (ownedResult.data ?? []).map((row) => [
+      row.patch_id,
+      {
+        earnedAt: row.earned_at,
+        featured: row.featured,
+      },
+    ]),
+  );
+
+  return definitions.flatMap((definition) => {
+    const ownership = ownershipById.get(definition.id);
+    if (!ownership) return [];
+
+    return [
+      {
+        ...safePatchDefinition(definition),
+        ...ownership,
+      },
+    ];
+  });
+}
+
+async function awardDailyRitePatches(params: {
+  fid: number;
+  event: RiteEventRow;
+  streak: number;
+  totalCompletions: number;
+  mark: string;
+  echoPower: number;
+}) {
+  const occurredAt =
+    params.event.completed_at ?? new Date().toISOString();
+
+  const context = {
+    riteEventId: params.event.id,
+    riteDate: params.event.rite_date,
+    riteKey: params.event.rite_key,
+    streak: params.streak,
+    totalCompletions: params.totalCompletions,
+    mark: params.mark,
+    echoPower: params.echoPower,
+  };
+
+  const [completionIds, streakIds] = await Promise.all([
+    processPatchEvent({
+      fid: params.fid,
+      eventKey: 'daily_rite_completed',
+      value: 1,
+      uniqueKey: params.event.rite_date,
+      idempotencyKey: `daily-rite-complete:${params.fid}:${params.event.id}`,
+      occurredAt,
+      context,
+    }),
+
+    processPatchEvent({
+      fid: params.fid,
+      eventKey: 'daily_rite_streak',
+      value: params.streak,
+      uniqueKey: `streak:${params.event.rite_date}`,
+      idempotencyKey: `daily-rite-streak:${params.fid}:${params.event.id}`,
+      occurredAt,
+      context,
+    }),
+  ]);
+
+  const unlockedPatchIds = Array.from(
+    new Set([...completionIds, ...streakIds]),
+  );
+
+  return {
+    unlockedPatchIds,
+    unlockedPatches: await loadUnlockedPatches(
+      params.fid,
+      unlockedPatchIds,
+    ),
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const auth = await requireFarcasterFid(request);
 
     if (!auth.ok) {
-      return json(
-        {
-          ok: false,
-          error: auth.error,
-        },
-        auth.status,
-      );
+      return json({ ok: false, error: auth.error }, auth.status);
     }
 
     const supabase = getSupabaseAdmin();
@@ -319,6 +479,8 @@ export async function GET(request: Request) {
       totalEchoes: totals.totalEchoes,
       totalRites: totals.totalRites,
       multiplier,
+      unlockedPatchIds: [],
+      unlockedPatches: [],
       ...buildResponseProfile(profile, auth.fid),
     });
   } catch (error) {
@@ -339,13 +501,7 @@ export async function POST(request: Request) {
     const auth = await requireFarcasterFid(request);
 
     if (!auth.ok) {
-      return json(
-        {
-          ok: false,
-          error: auth.error,
-        },
-        auth.status,
-      );
+      return json({ ok: false, error: auth.error }, auth.status);
     }
 
     const body = await readBody(request);
@@ -378,24 +534,14 @@ export async function POST(request: Request) {
         .update(updateProfile)
         .eq('fid', auth.fid)
         .select(
-          [
-            'fid',
-            'streak_count',
-            'best_streak',
-            'total_completions',
-            'last_completed_on',
-            'current_mark',
-            'username',
-            'display_name',
-            'pfp_url',
-            'current_echo_power',
-            'highest_echo_power',
-          ].join(', '),
+          'fid,streak_count,best_streak,total_completions,last_completed_on,current_mark,username,display_name,pfp_url,current_echo_power,highest_echo_power',
         )
         .single<DailyRiteRow>();
 
       if (updateError) {
-        throw new Error(`Daily rite profile update failed: ${updateError.message}`);
+        throw new Error(
+          `Daily rite profile update failed: ${updateError.message}`,
+        );
       }
 
       const totals = await getTobyworldEchoTotals(supabase);
@@ -423,6 +569,8 @@ export async function POST(request: Request) {
           totals.totalEchoes,
         ),
         echoPower: eventEchoPower,
+        unlockedPatchIds: [],
+        unlockedPatches: [],
         ...buildResponseProfile(refreshedProfile, auth.fid),
       });
     }
@@ -443,7 +591,6 @@ export async function POST(request: Request) {
     );
 
     const mark = getMark(nextStreak);
-
     const totalsBefore = await getTobyworldEchoTotals(supabase);
 
     const multiplier = getRiteEchoMultiplier(
@@ -479,24 +626,14 @@ export async function POST(request: Request) {
         onConflict: 'fid',
       })
       .select(
-        [
-          'fid',
-          'streak_count',
-          'best_streak',
-          'total_completions',
-          'last_completed_on',
-          'current_mark',
-          'username',
-          'display_name',
-          'pfp_url',
-          'current_echo_power',
-          'highest_echo_power',
-        ].join(', '),
+        'fid,streak_count,best_streak,total_completions,last_completed_on,current_mark,username,display_name,pfp_url,current_echo_power,highest_echo_power',
       )
       .single<DailyRiteRow>();
 
     if (profileError) {
-      throw new Error(`Daily rite profile save failed: ${profileError.message}`);
+      throw new Error(
+        `Daily rite profile save failed: ${profileError.message}`,
+      );
     }
 
     const { data: event, error: eventError } = await supabase
@@ -516,28 +653,11 @@ export async function POST(request: Request) {
         multiplier_cap: multiplier.cap,
       })
       .select(
-        [
-          'id',
-          'fid',
-          'rite_date',
-          'rite_key',
-          'mark',
-          'share_text',
-          'completed_at',
-          'streak_count',
-          'total_completions',
-          'echo_power',
-          'multiplier_cap',
-        ].join(', '),
+        'id,fid,rite_date,rite_key,mark,share_text,completed_at,streak_count,total_completions,echo_power,multiplier_cap',
       )
       .single<RiteEventRow>();
 
     if (eventError) {
-      /*
-       * The profile was already saved. If another request created today's event
-       * between the checks, return the authoritative database state rather than
-       * showing zeroes or failing the UI.
-       */
       if (eventError.code === '23505') {
         const [authoritativeProfile, authoritativeEvent, totals] =
           await Promise.all([
@@ -572,12 +692,25 @@ export async function POST(request: Request) {
             authoritativeEvent.echo_power ??
             authoritativeProfile?.current_echo_power ??
             echoPower,
+          unlockedPatchIds: [],
+          unlockedPatches: [],
           ...buildResponseProfile(authoritativeProfile, auth.fid),
         });
       }
 
-      throw new Error(`Daily rite event save failed: ${eventError.message}`);
+      throw new Error(
+        `Daily rite event save failed: ${eventError.message}`,
+      );
     }
+
+    const patchAwards = await awardDailyRitePatches({
+      fid: auth.fid,
+      event,
+      streak: nextStreak,
+      totalCompletions: nextTotalCompletions,
+      mark,
+      echoPower,
+    });
 
     const totals = await getTobyworldEchoTotals(supabase);
 
@@ -595,6 +728,8 @@ export async function POST(request: Request) {
       totalRites: totals.totalRites,
       multiplier,
       echoPower,
+      unlockedPatchIds: patchAwards.unlockedPatchIds,
+      unlockedPatches: patchAwards.unlockedPatches,
       ...buildResponseProfile(savedProfile, auth.fid),
     });
   } catch (error) {
