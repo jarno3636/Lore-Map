@@ -1,21 +1,27 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { TobyworldNav } from '@/components/tobyworld/TobyworldNav';
+import { TravelerPatchUnlockToast } from '@/components/tobyworld/TravelerPatchUnlockToast';
 import { Providers } from './providers';
 import './globals.css';
 
-const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://toby-atlas.vercel.app').replace(
-  /\/+$/,
-  '',
-);
+const appUrl = (
+  process.env.NEXT_PUBLIC_APP_URL ??
+  'https://toby-atlas.vercel.app'
+).replace(/\/+$/, '');
 
 const assetVersion = 'v8';
 
 const appName = 'Tobyworld Atlas';
-const appDescription = 'Enter the pond. Follow the wheel. Reveal your Tobyworld role.';
 
-const splashIconUrl = `${appUrl}/miniapp/tobyworld-splash-icon.png`;
-const shareImageUrl = `${appUrl}/miniapp/tobyworld-og-image.png?${assetVersion}`;
+const appDescription =
+  'Enter the pond. Follow the wheel. Reveal your Tobyworld role.';
+
+const splashIconUrl =
+  `${appUrl}/miniapp/tobyworld-splash-icon.png`;
+
+const shareImageUrl =
+  `${appUrl}/miniapp/tobyworld-og-image.png?${assetVersion}`;
 
 const miniAppEmbed = {
   version: '1',
@@ -111,13 +117,20 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: ReactNode;
+}>) {
   return (
     <html lang="en">
       <body>
         <Providers>
           <TobyworldNav />
+
           {children}
+
+          <TravelerPatchUnlockToast />
         </Providers>
       </body>
     </html>
