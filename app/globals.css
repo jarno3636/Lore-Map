@@ -3067,3 +3067,90 @@ img {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+/* -------------------------------------------------- */
+/* Traveler Pack Shortcut */
+/* -------------------------------------------------- */
+
+.traveler-pack-link {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.traveler-pack-button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  padding: 12px 18px;
+
+  max-width: 340px;
+  width: fit-content;
+
+  text-decoration: none;
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.05),
+      rgba(255,255,255,.025)
+    );
+
+  border: 1px solid rgba(255,220,120,.12);
+
+  backdrop-filter: blur(10px);
+
+  transition:
+    transform .22s ease,
+    border-color .22s ease,
+    background .22s ease,
+    box-shadow .22s ease;
+}
+
+.traveler-pack-button:hover {
+  transform: translateY(-2px);
+
+  border-color: rgba(245,210,110,.35);
+
+  box-shadow:
+    0 12px 28px rgba(0,0,0,.28),
+    0 0 18px rgba(240,205,110,.12);
+}
+
+.traveler-pack-icon {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 6px rgba(255,215,120,.25));
+}
+
+.traveler-pack-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.traveler-pack-copy small {
+  color: rgba(255,255,255,.55);
+  font-size: .68rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.traveler-pack-copy strong {
+  color: #f8f4df;
+  font-size: .95rem;
+  font-weight: 700;
+}
+
+.traveler-pack-arrow {
+  margin-left: auto;
+
+  color: rgba(255,255,255,.45);
+
+  transition: transform .22s ease;
+}
+
+.traveler-pack-button:hover .traveler-pack-arrow {
+  transform: translateX(3px);
+}
